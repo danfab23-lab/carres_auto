@@ -119,7 +119,7 @@ f1_tracker_html = """
     </div>
 
     <script>
-        const SESSION_KEY = '9495'; // Usa 'latest' en carrera real
+        const SESSION_KEY = 'latest'; // Intentará jalar la última sesión registrada en el servidor automáticamente
         const API_URL = 'https://api.openf1.org/v1';
         let driversDatabase = {};
 
