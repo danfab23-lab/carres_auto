@@ -126,6 +126,7 @@ f1_ultimate_dashboard = """
         }
         canvas { max-width: 100%; max-height: 100%; }
 
+        /* MULTIPESTAÑAS (TABS) */
         .tabs-container {
             display: flex;
             gap: 10px;
@@ -161,7 +162,7 @@ f1_ultimate_dashboard = """
             display: flex;
             flex-direction: column;
             gap: 10px;
-            min-width: 150px;
+            min-width: 160px;
             font-size: 12px;
         }
         .chart-select {
@@ -170,6 +171,26 @@ f1_ultimate_dashboard = """
             border: 1px solid #45f3ff;
             padding: 4px;
             border-radius: 4px;
+        }
+        
+        /* Contenedor Grid para lista de Checkboxes */
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+            overflow-y: auto;
+            max-height: 220px;
+            border: 1px solid #334455;
+            padding: 6px;
+            background-color: #0b0c10;
+            border-radius: 4px;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -223,6 +244,11 @@ f1_ultimate_dashboard = """
             </div>
 
             <div id="tab-pace" class="tab-content">
+                <div class="chart-controls">
+                    <label style="color:#45f3ff;">Filtrar Pilotos:</label>
+                    <div id="pace-checkboxes" class="checkbox-grid">
+                        </div>
+                </div>
                 <div style="flex-grow:1; height:100%;"><canvas id="chartPace"></canvas></div>
             </div>
 
@@ -252,6 +278,7 @@ f1_ultimate_dashboard = """
                 
                 const selectA = document.getElementById('pA-select');
                 const selectB = document.getElementById('pB-select');
+                const paceCheckboxesContainer = document.getElementById('pace-checkboxes');
 
                 data.forEach((d, index) => {
                     drivers[d.driver_number] = {
@@ -263,10 +290,11 @@ f1_ultimate_dashboard = """
                         gapLeader: 'INTERVAL', interval: '-',
                         x: 0, y: 0,
                         telemetryHistory: [], 
-                        paceHistory: Array.from({length: 10}, () => 80 + Math.random()*5), 
+                        paceHistory: Array.from({length: 10}, () => 80 + Math.random()*4), 
                         overtakePercentage: 15 + Math.random()*40
                     };
 
+                    // Selectores Tab 1
                     let optA = document.createElement('option');
                     optA.value = d.driver_number; optA.innerText = d.name_acronym;
                     if(index === 0) optA.selected = true;
@@ -274,8 +302,21 @@ f1_ultimate_dashboard = """
 
                     let optB = document.createElement('option');
                     optB.value = d.driver_number; optB.innerText = d.name_acronym;
-                    if(index === 1 || index === data.length-1) optB.selected = true;
+                    if(index === 1) optB.selected = true;
                     selectB.appendChild(optB);
+
+                    // NUEVO: Checkboxes Tab 2 para la selección manual
+                    let label = document.createElement('label');
+                    label.className = 'checkbox-item';
+                    
+                    // Activamos por defecto los primeros 4 pilotos de la base de datos
+                    let checkedStatus = index < 4 ? 'checked' : '';
+                    
+                    label.innerHTML = `
+                        <input type="checkbox" value="${d.driver_number}" ${checkedStatus} onchange="updatePaceChartDatasets()">
+                        <span style="color: ${drivers[d.driver_number].color}">■</span> ${d.name_acronym}
+                    `;
+                    paceCheckboxesContainer.appendChild(label);
                 });
 
                 initTelemetryChart();
@@ -317,6 +358,29 @@ f1_ultimate_dashboard = """
                 data: { labels: ['V1','V2','V3','V4','V5','V6','V7','V8','V9','V10'], datasets: [] },
                 options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#334455' } } } }
             });
+            // Generar datasets iniciales mapeados por los checkboxes activos
+            updatePaceChartDatasets();
+        }
+
+        // NUEVO: Función encargada de actualizar qué pilotos se pintan en la pestaña 2
+        function updatePaceChartDatasets() {
+            if(!chart2) return;
+            
+            const checkedBoxes = document.querySelectorAll('#pace-checkboxes input[type="checkbox"]:checked');
+            const selectedDriverNumbers = Array.from(checkedBoxes).map(cb => cb.value);
+
+            chart2.data.datasets = selectedDriverNumbers.map(num => {
+                let d = drivers[num];
+                return {
+                    label: d.name,
+                    data: d.paceHistory,
+                    borderColor: d.color,
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                };
+            });
+            chart2.update('none');
         }
 
         function initOvertakeChart() {
@@ -427,6 +491,7 @@ f1_ultimate_dashboard = """
         }
 
         function updateChartsRuntime() {
+            // Update Tab 1
             const pANum = document.getElementById('pA-select').value;
             const pBNum = document.getElementById('pB-select').value;
             
@@ -445,18 +510,12 @@ f1_ultimate_dashboard = """
                 chart1.update('none');
             }
 
+            // MODIFICADO: Mapea continuamente los ritmos manteniendo las casillas seleccionadas por el streamer
             if(chart2) {
-                const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos).slice(0, 4);
-                chart2.data.datasets = list.map(d => ({
-                    label: d.name,
-                    data: d.paceHistory,
-                    borderColor: d.color,
-                    borderWidth: 2,
-                    fill: false
-                }));
-                chart2.update('none');
+                updatePaceChartDatasets();
             }
 
+            // Update Tab 3
             if(chart3) {
                 const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
                 chart3.data.labels = list.map(d => d.name);
@@ -507,27 +566,20 @@ f1_ultimate_dashboard = """
 
             if (trackPoints.length === 0) return;
 
-            // REDISEÑO: Añadido margen estricto para evitar recortes en los bordes
             const canvasPadding = 60; 
-            
-            // 1. Calcular escala base usando las dimensiones con margen restado
             const scaleX = (canvas.width - canvasPadding * 2) / (maxX - minX || 1);
             const scaleY = (canvas.height - canvasPadding * 2) / (maxY - minY || 1);
             const scale = Math.min(scaleX, scaleY);
 
-            // 2. Dimensiones finales de la pista escalada en la pantalla
             const trackWidthInCanvas = (maxX - minX) * scale;
             const trackHeightInCanvas = (maxY - minY) * scale;
 
-            // 3. Centrado perfecto distribuyendo el espacio muerto sobrante en divisiones simétricas
             const offsetX = (canvas.width - trackWidthInCanvas) / 2;
             const offsetY = (canvas.height - trackHeightInCanvas) / 2;
 
-            // 4. Transformación matemática calibrada de coordenadas
             const toCanvasX = (x) => offsetX + (x - minX) * scale;
             const toCanvasY = (y) => canvas.height - offsetY - (y - minY) * scale;
 
-            // Trazado del asfalto
             ctx.strokeStyle = '#2f3e46';
             ctx.lineWidth = 5;
             ctx.beginPath();
@@ -539,7 +591,6 @@ f1_ultimate_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
-            // Ubicaciones de los monoplazas centraditos y encajados
             Object.values(drivers).forEach(d => {
                 if (d.x && d.y && d.pos > 0) {
                     const cx = toCanvasX(d.x);
