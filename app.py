@@ -191,6 +191,5 @@ f1_tracker_html = """
 </body>
 </html>
 """
-
-# Renderizar el componente nativo en Streamlit con las dimensiones de TikTok
-st.components.v1.html(f1_tracker_html, width=400, height=750, scroller=False)
+# Cambia 'scroller' por 'scrolling'
+st.components.v1.html(f1_tracker_html, width=400, height=750, scrolling=False)
