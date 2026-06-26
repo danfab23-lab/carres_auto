@@ -1,7 +1,7 @@
 import streamlit as st
 
-# Configuración de pantalla completa
-st.set_page_config(page_title="F1 Advanced Command Center", layout="wide")
+# Configuración de pantalla completa en Escritorio
+st.set_page_config(page_title="F1 Advanced Command Center & Analytics", layout="wide")
 
 st.markdown("""
     <style>
@@ -13,11 +13,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-f1_mega_dashboard = """
+f1_ultimate_dashboard = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <!-- Importar Chart.js para las gráficas de alta fidelidad -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -30,39 +32,49 @@ f1_mega_dashboard = """
             background-color: #0b0c10;
             color: #ffffff;
             height: 100vh;
-            overflow: hidden;
+            overflow-y: auto;
             padding: 10px;
         }
         
-        /* Layout Grid Principal */
         .main-layout {
             display: flex;
             flex-direction: column;
             gap: 10px;
-            height: 100vh;
         }
 
-        /* BARRA DE CLIMA */
+        /* BARRA DE CLIMA SUPERIOR */
         .weather-bar {
             background-color: #1f2833;
             border: 1px solid #45f3ff33;
             border-radius: 8px;
-            padding: 10px 20px;
+            padding: 8px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
+            font-size: 13px;
         }
         .weather-item { display: flex; align-items: center; gap: 8px; }
         .weather-val { color: #45f3ff; }
 
-        .dashboard-container {
+        /* SECCIÓN SUPERIOR: TIMING Y MAPA */
+        .top-grid {
             display: grid;
             grid-template-columns: 1.2fr 0.8fr;
             gap: 15px;
-            height: calc(100vh - 75px);
+            height: 45vh;
         }
         
+        /* SECCIÓN INFERIOR: PANEL DE GRÁFICAS MULTIPESTAÑA */
+        .bottom-analytics {
+            background-color: #1f2833;
+            border: 1px solid #45f3ff33;
+            border-radius: 10px;
+            padding: 15px;
+            height: 42vh;
+            display: flex;
+            flex-direction: column;
+        }
+
         .panel {
             background-color: #1f2833;
             border-radius: 10px;
@@ -78,25 +90,25 @@ f1_mega_dashboard = """
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2f3e46;
-            padding-bottom: 8px;
-            margin-bottom: 10px;
+            padding-bottom: 5px;
+            margin-bottom: 8px;
         }
 
         .table-wrapper { overflow-y: auto; flex-grow: 1; }
-        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
-        th { background-color: #0b0c10; color: #45f3ff; padding: 8px; position: sticky; top: 0; z-index: 10; }
-        tr { border-bottom: 1px solid #2f3e46; height: 36px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
+        th { background-color: #0b0c10; color: #45f3ff; padding: 6px; position: sticky; top: 0; z-index: 10; }
+        tr { border-bottom: 1px solid #2f3e46; height: 30px; }
         tr:hover { background-color: #2b3a4a; }
-        td { padding: 4px 8px; }
+        td { padding: 4px 6px; }
 
         .stripe { width: 4px; padding: 0; }
-        .pos { font-size: 14px; color: #45f3ff; text-align: center; }
+        .pos { font-size: 13px; color: #45f3ff; text-align: center; }
         .up { color: #00ff88; } .down { color: #ff3838; } .same { color: #777; }
         
         .tyre {
-            width: 20px; height: 20px; border-radius: 50%;
+            width: 18px; height: 18px; border-radius: 50%;
             display: inline-flex; align-items: center; justify-content: center;
-            font-size: 10px; color: #000;
+            font-size: 9px; color: #000;
         }
         .tyre-SOFT { background-color: #ff1801; color: #fff; }
         .tyre-MEDIUM { background-color: #fad105; }
@@ -114,13 +126,62 @@ f1_mega_dashboard = """
             align-items: center;
             background-color: #0b0c10;
             border-radius: 6px;
+            height: 100%;
         }
         canvas { max-width: 100%; max-height: 100%; }
+
+        /* CONTROLES DE PESTAÑAS (TABS) */
+        .tabs-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #2f3e46;
+            padding-bottom: 5px;
+        }
+        .tab-btn {
+            background-color: #0b0c10;
+            color: #aaa;
+            border: 1px solid #334455;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .tab-btn.active {
+            background-color: #45f3ff;
+            color: #000;
+            border-color: #45f3ff;
+        }
+        .tab-content {
+            display: none;
+            flex-grow: 1;
+            position: relative;
+            height: 100%;
+        }
+        .tab-content.active {
+            display: flex;
+            gap: 15px;
+        }
+        .chart-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 150px;
+            font-size: 12px;
+        }
+        .chart-select {
+            background-color: #0b0c10;
+            color: #fff;
+            border: 1px solid #45f3ff;
+            padding: 4px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
 
     <div class="main-layout">
+        <!-- CLIMA -->
         <div class="weather-bar">
             <div class="weather-item">🌧️ LLUVIA: <span id="w-rain" class="weather-val">0%</span></div>
             <div class="weather-item">🌡️ AIRE: <span id="w-air" class="weather-val">--°C</span></div>
@@ -129,26 +190,15 @@ f1_mega_dashboard = """
             <div class="weather-item">💧 HUMEDAD: <span id="w-hum" class="weather-val">--%</span></div>
         </div>
 
-        <div class="dashboard-container">
+        <!-- TIMING MASTER Y GPS MAP -->
+        <div class="top-grid">
             <div class="panel">
-                <header>
-                    <h2>LIVE TELEMETRY & TIMING MASTER</h2>
-                </header>
+                <header><h2>LIVE TELEMETRY & TIMING MASTER</h2></header>
                 <div class="table-wrapper">
                     <table>
                         <thead>
                             <tr>
-                                <th></th>
-                                <th>POS</th>
-                                <th>+/-</th>
-                                <th>PILOTO</th>
-                                <th>Nº</th>
-                                <th>GAP LEADER</th>
-                                <th>INTERVAL</th>
-                                <th>LLANTA</th>
-                                <th>VELOCIDAD</th>
-                                <th>RPM</th>
-                                <th>M.</th>
+                                <th></th><th>POS</th><th>+/-</th><th>PILOTO</th><th>Nº</th><th>GAP LEADER</th><th>INTERVAL</th><th>LLANTA</th><th>VELOCIDAD</th><th>RPM</th><th>M.</th>
                             </tr>
                         </thead>
                         <tbody id="telemetry-table-body"></tbody>
@@ -157,13 +207,38 @@ f1_mega_dashboard = """
             </div>
 
             <div class="panel">
-                <header>
-                    <h2>REAL-TIME GPS TRACK MAP</h2>
-                    <div id="circuit-status" style="color: #45f3ff;">DIBUJANDO TRAZADO...</div>
-                </header>
-                <div class="map-wrapper">
-                    <canvas id="trackMap" width="550" height="550"></canvas>
+                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">DIBUJANDO TRAZADO...</div></header>
+                <div class="map-wrapper"><canvas id="trackMap" width="500" height="350"></canvas></div>
+            </div>
+        </div>
+
+        <!-- MULTIGRAFICAS DE INGENIERÍA -->
+        <div class="bottom-analytics">
+            <div class="tabs-container">
+                <button class="tab-btn active" onclick="switchTab('tab-telemetry')">1. Telemetría Cara a Cara (V vs T)</button>
+                <button class="tab-btn" onclick="switchTab('tab-pace')">2. Ritmo de Carrera (Race Pace)</button>
+                <button class="tab-btn" onclick="switchTab('tab-overtake')">3. Despliegue de Potencia (Overtake Mode)</button>
+            </div>
+
+            <!-- GRAFICA 1: CARA A CARA -->
+            <div id="tab-telemetry" class="tab-content active">
+                <div class="chart-controls">
+                    <label>Piloto A:</label>
+                    <select id="pA-select" class="chart-select" onchange="initTelemetryChart()"></select>
+                    <label>Piloto B:</label>
+                    <select id="pB-select" class="chart-select" onchange="initTelemetryChart()"></select>
                 </div>
+                <div style="flex-grow:1; height:100%;"><canvas id="chartTelemetry"></canvas></div>
+            </div>
+
+            <!-- GRAFICA 2: RACE PACE -->
+            <div id="tab-pace" class="tab-content">
+                <div style="flex-grow:1; height:100%;"><canvas id="chartPace"></canvas></div>
+            </div>
+
+            <!-- GRAFICA 3: OVERTAKE MODE -->
+            <div id="tab-overtake" class="tab-content">
+                <div style="flex-grow:1; height:100%;"><canvas id="chartOvertake"></canvas></div>
             </div>
         </div>
     </div>
@@ -178,11 +253,19 @@ f1_mega_dashboard = """
         let trackPoints = []; 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
+        // Instancias Globals de las Gráficas
+        let chart1, chart2, chart3;
+        let timeLabelCounter = 0;
+
         async function init() {
             try {
                 const res = await fetch(`${API_URL}/drivers?session_key=${SESSION_KEY}`);
                 const data = await res.json();
-                data.forEach(d => {
+                
+                const selectA = document.getElementById('pA-select');
+                const selectB = document.getElementById('pB-select');
+
+                data.forEach((d, index) => {
                     drivers[d.driver_number] = {
                         name: d.name_acronym,
                         color: d.team_colour ? `#${d.team_colour}` : '#ffffff',
@@ -190,18 +273,75 @@ f1_mega_dashboard = """
                         pos: 0, change: '-', tyre: 'UNKNOWN',
                         speed: 0, rpm: 0, gear: 'N',
                         gapLeader: 'INTERVAL', interval: '-',
-                        x: 0, y: 0
+                        x: 0, y: 0,
+                        telemetryHistory: [], 
+                        paceHistory: Array.from({length: 10}, () => 80 + Math.random()*5), // Simulación inicial base ritmos
+                        overtakePercentage: 15 + Math.random()*40
                     };
+
+                    // Alimentar los selectores de pilotos para el cara a cara
+                    let optA = document.createElement('option');
+                    optA.value = d.driver_number; optA.innerText = d.name_acronym;
+                    if(index === 0) optA.selected = true;
+                    selectA.appendChild(optA);
+
+                    let optB = document.createElement('option');
+                    optB.value = d.driver_number; optB.innerText = d.name_acronym;
+                    if(index === 1 || index === data.length-1) optB.selected = true;
+                    selectB.appendChild(optB);
                 });
 
-                // Bucles continuos
+                // Inicializar esqueletos de Chart.js
+                initTelemetryChart();
+                initPaceChart();
+                initOvertakeChart();
+
                 tick();
                 setInterval(tick, 1500);
                 
-                // El clima cambia más lento, se consulta cada 10 segundos
                 updateWeather();
                 setInterval(updateWeather, 10000);
             } catch (e) { console.error(e); }
+        }
+
+        // CONTROLADOR DE PESTAÑAS
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // --- INICIALIZADORES DE GRÁFICAS ---
+        function initTelemetryChart() {
+            if(chart1) chart1.destroy();
+            const ctx = document.getElementById('chartTelemetry').getContext('2d');
+            chart1 = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [
+                    { label: 'Piloto A', data: [], borderColor: '#45f3ff', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+                    { label: 'Piloto B', data: [], borderColor: '#ff1801', borderWidth: 2, tension: 0.3, pointRadius: 0 }
+                ]},
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 350, grid: { color: '#334455' } }, x: { grid: { display: false } } } }
+            });
+        }
+
+        function initPaceChart() {
+            const ctx = document.getElementById('chartPace').getContext('2d');
+            chart2 = new Chart(ctx, {
+                type: 'line',
+                data: { labels: ['V1','V2','V3','V4','V5','V6','V7','V8','V9','V10'], datasets: [] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#334455' } } } }
+            });
+        }
+
+        function initOvertakeChart() {
+            const ctx = document.getElementById('chartOvertake').getContext('2d');
+            chart3 = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: 'Despliegue Overtake Mode / Manual Override %', data: [], backgroundColor: '#00ffcc' }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min:0, max:100, grid: { color: '#334455' } } } }
+            });
         }
 
         async function updateWeather() {
@@ -216,12 +356,11 @@ f1_mega_dashboard = """
                     document.getElementById('w-wind').innerText = `${latest.wind_speed} m/s`;
                     document.getElementById('w-hum').innerText = `${latest.humidity}%`;
                 }
-            } catch(e) { console.warn("Error leyendo clima", e); }
+            } catch(e) { console.warn(e); }
         }
 
         async function tick() {
             try {
-                // Consultas paralelas agregando intervalos (intervals)
                 const [posRes, stintRes, carRes, locRes, intRes] = await Promise.all([
                     fetch(`${API_URL}/position?session_key=${SESSION_KEY}`),
                     fetch(`${API_URL}/stints?session_key=${SESSION_KEY}`),
@@ -236,7 +375,7 @@ f1_mega_dashboard = """
                 const locations = await locRes.json();
                 const intervals = await intRes.json();
 
-                // 1. Posiciones y Cambios (+/-)
+                // 1. Tiempos y Posición
                 positions.forEach(p => {
                     let d = drivers[p.driver_number];
                     if (d) {
@@ -249,11 +388,10 @@ f1_mega_dashboard = """
                     }
                 });
 
-                // 2. Neumáticos
+                // 2. Compuestos
                 stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
 
-                // 3. Telemetría corregida (Evitar 0 estático en simulación)
-                // Buscamos de atrás hacia adelante los valores válidos más recientes
+                // 3. Telemetría e Historial de Gráficas
                 if(cars && cars.length > 0) {
                     let cache = {};
                     for(let i = cars.length - 1; i >= 0; i--) {
@@ -264,13 +402,18 @@ f1_mega_dashboard = """
                                 d.speed = c.speed ?? 0;
                                 d.rpm = c.rpm ?? 0;
                                 d.gear = c.gear ?? 'N';
+                                
+                                // Guardar registro para gráficos de líneas
+                                d.telemetryHistory.push(c.speed ?? 0);
+                                if(d.telemetryHistory.length > 25) d.telemetryHistory.shift();
+                                
                                 cache[c.driver_number] = true;
                             }
                         }
                     }
                 }
 
-                // 4. Gaps e Intervalos en tiempo real
+                // 4. Gaps
                 if(intervals && intervals.length > 0) {
                     intervals.forEach(i => {
                         let d = drivers[i.driver_number];
@@ -281,14 +424,12 @@ f1_mega_dashboard = """
                     });
                 }
 
-                // 5. Ubicaciones GPS dinámicas
+                // 5. GPS
                 locations.forEach(l => {
                     let d = drivers[l.driver_number];
                     if(d) {
-                        // Forzar cambio leve de coordenadas si la sesión es estática para ver la animación fluida
                         d.x = l.x + (Math.random() * 4 - 2); 
                         d.y = l.y + (Math.random() * 4 - 2);
-                        
                         if (!circuitLoaded && l.x && l.y) {
                             trackPoints.push({x: l.x, y: l.y});
                             if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x;
@@ -304,8 +445,57 @@ f1_mega_dashboard = """
 
                 renderTable();
                 drawMap();
+                updateChartsRuntime();
 
-            } catch (e) { console.warn("Sincronizando...", e); }
+            } catch (e) { console.warn(e); }
+        }
+
+        // --- ACTUALIZADOR DE GRÁFICAS EN TIEMPO REAL ---
+        function updateChartsRuntime() {
+            // 1. Update Telemetría Cara a Cara
+            const pANum = document.getElementById('pA-select').value;
+            const pBNum = document.getElementById('pB-select').value;
+            
+            if(drivers[pANum] && drivers[pBNum] && chart1) {
+                chart1.data.datasets[0].label = drivers[pANum].name;
+                chart1.data.datasets[0].borderColor = drivers[pANum].color;
+                chart1.data.datasets[0].data = drivers[pANum].telemetryHistory;
+
+                chart1.data.datasets[1].label = drivers[pBNum].name;
+                chart1.data.datasets[1].borderColor = drivers[pBNum].color;
+                chart1.data.datasets[1].data = drivers[pBNum].telemetryHistory;
+
+                timeLabelCounter++;
+                chart1.data.labels.push('');
+                if(chart1.data.labels.length > 25) chart1.data.labels.shift();
+                chart1.update('none');
+            }
+
+            // 2. Update Race Pace Chart (Top 4 ordenados)
+            if(chart2) {
+                const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos).slice(0, 4);
+                chart2.data.datasets = list.map(d => ({
+                    label: d.name,
+                    data: d.paceHistory,
+                    borderColor: d.color,
+                    borderWidth: 2,
+                    fill: false
+                }));
+                chart2.update('none');
+            }
+
+            // 3. Update Overtake Mode (Gráfica de barras horizontales/verticales de todos)
+            if(chart3) {
+                const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
+                chart3.data.labels = list.map(d => d.name);
+                chart3.data.datasets[0].data = list.map(d => {
+                    // Simular descarga/uso del manual override si va a más de 300 km/h
+                    if(d.speed > 290) d.overtakePercentage = Math.max(0, d.overtakePercentage - 0.4);
+                    else d.overtakePercentage = Math.min(100, d.overtakePercentage + 0.1);
+                    return d.overtakePercentage.toFixed(1);
+                });
+                chart3.update('none');
+            }
         }
 
         function renderTable() {
@@ -319,8 +509,6 @@ f1_mega_dashboard = """
                 else if (d.change.startsWith('-') && d.change !== '-') changeClass = 'down';
 
                 let tLetter = d.tyre !== 'UNKNOWN' ? d.tyre.charAt(0) : '?';
-                
-                // El primer lugar es el líder
                 let displayGap = idx === 0 ? "LEADER" : d.gapLeader;
                 let displayInt = idx === 0 ? "LAP 1" : d.interval;
 
@@ -348,7 +536,7 @@ f1_mega_dashboard = """
 
             if (trackPoints.length === 0) return;
 
-            const padding = 30;
+            const padding = 25;
             const scaleX = (canvas.width - padding * 2) / (maxX - minX || 1);
             const scaleY = (canvas.height - padding * 2) / (maxY - minY || 1);
             const scale = Math.min(scaleX, scaleY);
@@ -356,9 +544,8 @@ f1_mega_dashboard = """
             const toCanvasX = (x) => padding + (x - minX) * scale;
             const toCanvasY = (y) => canvas.height - padding - (y - minY) * scale;
 
-            // Trazado de pista gris de fondo
             ctx.strokeStyle = '#2f3e46';
-            ctx.lineWidth = 6;
+            ctx.lineWidth = 5;
             ctx.beginPath();
             for(let i=0; i<trackPoints.length; i+=4) {
                 let pt = trackPoints[i];
@@ -368,25 +555,20 @@ f1_mega_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
-            // Ubicaciones de los monoplazas con micro-movimiento dinámico
             Object.values(drivers).forEach(d => {
                 if (d.x && d.y && d.pos > 0) {
                     const cx = toCanvasX(d.x);
                     const cy = toCanvasY(d.y);
 
                     ctx.fillStyle = d.color;
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
-                    ctx.fill();
+                    ctx.beginPath(); ctx.arc(cx, cy, 7, 0, 2 * Math.PI); ctx.fill();
 
                     ctx.fillStyle = '#000000';
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, 5, 0, 2 * Math.PI);
-                    ctx.fill();
+                    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fill();
 
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = '10px sans-serif';
-                    ctx.fillText(d.name, cx + 10, cy + 3);
+                    ctx.font = '9px sans-serif';
+                    ctx.fillText(d.name, cx + 9, cy + 3);
                 }
             });
         }
@@ -397,14 +579,13 @@ f1_mega_dashboard = """
 </html>
 """
 
-# INTERFAZ DE CONTROL EN PIT LANE (PYTHON)
-st.sidebar.title("🎛️ Transmisión Master")
+# INTERFAZ DE CONTROL LATERAL DE STREAMLIT (PYTHON)
+st.sidebar.title("🎛️ Transmisión Master Pro")
 session_mode = st.sidebar.selectbox(
     "Monitoreo de Sesión:",
     ["Simulación (Datos Históricos)", "Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
 )
 
-# Control inteligente de IDs de sesión para mitigar la latencia de OpenF1
 if session_mode == "Simulación (Datos Históricos)":
     session_id = "9535" 
 elif session_mode == "Práctica 3":
@@ -414,10 +595,11 @@ elif session_mode == "Clasificación (Qualy)":
 else:
     session_id = "latest"  
 
-# Inyección segura del ID al motor asíncrono de JavaScript
-dashboard_final = f1_mega_dashboard.replace(
+# Inyectar la variable de control al script asíncrono
+dashboard_completo = f1_ultimate_dashboard.replace(
     "const SESSION_KEY = 'latest';", 
     f"const SESSION_KEY = '{session_id}';"
 )
 
-st.components.v1.html(dashboard_final, scrolling=False)
+# Ajuste automático del tamaño del canvas HTML5
+st.components.v1.html(dashboard_completo, height=920, scrolling=True)
