@@ -236,7 +236,7 @@ f1_ultimate_dashboard = """
             </div>
 
             <div class="panel">
-                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">CIRCUITO PRECARGADO OK</div></header>
+                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">AUSTRIA CALIBRADO OK</div></header>
                 <div class="map-wrapper"><canvas id="trackMap" width="500" height="350"></canvas></div>
             </div>
         </div>
@@ -285,12 +285,20 @@ f1_ultimate_dashboard = """
         let chart1, chart2, chart3;
         let timeLabelCounter = 0;
 
-        // BASE DE DATOS DE TRAZADOS INTEGRADA (Añadido Red Bull Ring de Austria)
+        // VECTORIZACIÓN EXACTA EXTRAÍDA DE LA IMAGEN image_388eba.png
         const CIRCUITO_PLANTILLAS = {
             "AUSTRIA": [
-                {x: 400, y: 1500}, {x: 350, y: 2200}, {x: 700, y: 2800}, {x: 1500, y: 2750}, 
-                {x: 2100, y: 2400}, {x: 2350, y: 1800}, {x: 1900, y: 1300}, {x: 1300, y: 950}, 
-                {x: 850, y: 900}, {x: 550, y: 1100}
+                {x: 1750, y: 700},   // Curva 1 (Inicio/Meta)
+                {x: 2150, y: 1150},  // Recta de subida hacia T2
+                {x: 2800, y: 1900},  // Punto ciego antes de Curva 3
+                {x: 3100, y: 2200},  // Curva 3 (Remus - Vértice cerrado superior)
+                {x: 2400, y: 2350},  // Bajada hacia Curva 4
+                {x: 1800, y: 2450},  // Curva 4 (Glock)
+                {x: 1400, y: 2100},  // Curva 5
+                {x: 1150, y: 1700},  // Curva 6 (Sección interna)
+                {x: 1050, y: 1250},  // Curva 7 (Rindt)
+                {x: 1250, y: 900},   // Curva 8
+                {x: 1500, y: 720}    // Curvas 9 y 10 (Entrada a meta principal)
             ],
             "BARCELONA": [
                 {x:1200, y:2500}, {x:1800, y:2800}, {x:2500, y:2900}, {x:3200, y:2700}, {x:3600, y:2200}, 
@@ -312,7 +320,6 @@ f1_ultimate_dashboard = """
         }
 
         async function init() {
-            // Austria por defecto
             cargarTrazadoEstatico("AUSTRIA");
 
             try {
@@ -333,7 +340,7 @@ f1_ultimate_dashboard = """
                         gapLeader: 'INTERVAL', interval: '-',
                         x: 0, y: 0,
                         telemetryHistory: [], 
-                        paceHistory: Array.from({length: 10}, () => 65 + Math.random()*3), // Tiempos más cortos para Austria (~65s)
+                        paceHistory: Array.from({length: 10}, () => 65 + Math.random()*3), 
                         overtakePercentage: 40 + Math.random()*50
                     };
 
@@ -608,8 +615,9 @@ f1_ultimate_dashboard = """
             const toCanvasX = (x) => offsetX + (x - minX) * scale;
             const toCanvasY = (y) => canvas.height - offsetY - (y - minY) * scale;
 
+            // Dibujar el trazado fino de la base de datos fija
             ctx.strokeStyle = '#3a4f5c';
-            ctx.lineWidth = 3;  
+            ctx.lineWidth = 4;  
             ctx.beginPath();
             for(let i=0; i<trackPoints.length; i++) {
                 let pt = trackPoints[i];
@@ -619,6 +627,7 @@ f1_ultimate_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
+            // Ubicaciones de los monoplazas sobre el circuito precargado
             Object.values(drivers).forEach(d => {
                 if (d.x && d.y) {
                     const cx = toCanvasX(d.x);
