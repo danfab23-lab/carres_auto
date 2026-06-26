@@ -93,9 +93,25 @@ f1_ultimate_dashboard = """
         .table-wrapper { overflow-y: auto; flex-grow: 1; }
         table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
         th { background-color: #0b0c10; color: #45f3ff; padding: 6px; position: sticky; top: 0; z-index: 10; }
-        tr { border-bottom: 1px solid #2f3e46; height: 30px; }
+        tr { border-bottom: 1px solid #2f3e46; height: 30px; transition: background-color 0.2s; }
         tr:hover { background-color: #2b3a4a; }
         td { padding: 4px 6px; }
+
+        /* NUEVOS ESTILOS PARA FILAS EN PITS */
+        tr.status-pit-lane { background-color: rgba(255, 159, 67, 0.2); } /* Naranja suave: entrando/saliendo */
+        tr.status-pit-box { background-color: rgba(255, 56, 56, 0.25); }  /* Rojo suave: detenido en garage */
+        
+        .pit-badge {
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+        .badge-lane { background-color: #ff9f43; color: #000; animation: blink 1s infinite; }
+        .badge-box { background-color: #ff3838; color: #fff; }
+
+        @keyframes blink { 50% { opacity: 0.4; } }
 
         .stripe { width: 4px; padding: 0; }
         .pos { font-size: 13px; color: #45f3ff; text-align: center; }
@@ -126,7 +142,6 @@ f1_ultimate_dashboard = """
         }
         canvas { max-width: 100%; max-height: 100%; }
 
-        /* MULTIPESTAÑAS (TABS) */
         .tabs-container {
             display: flex;
             gap: 10px;
@@ -173,7 +188,6 @@ f1_ultimate_dashboard = """
             border-radius: 4px;
         }
         
-        /* Contenedor Grid para lista de Checkboxes */
         .checkbox-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -197,6 +211,7 @@ f1_ultimate_dashboard = """
 <body>
 
     <div class="main-layout">
+        <!-- CLIMA -->
         <div class="weather-bar">
             <div class="weather-item">🌧️ LLUVIA: <span id="w-rain" class="weather-val">0%</span></div>
             <div class="weather-item">🌡️ AIRE: <span id="w-air" class="weather-val">--°C</span></div>
@@ -205,6 +220,7 @@ f1_ultimate_dashboard = """
             <div class="weather-item">💧 HUMEDAD: <span id="w-hum" class="weather-val">--%</span></div>
         </div>
 
+        <!-- TIMING MASTER Y GPS MAP -->
         <div class="top-grid">
             <div class="panel">
                 <header><h2>LIVE TELEMETRY & TIMING MASTER</h2></header>
@@ -212,7 +228,7 @@ f1_ultimate_dashboard = """
                     <table>
                         <thead>
                             <tr>
-                                <th></th><th>POS</th><th>+/-</th><th>PILOTO</th><th>Nº</th><th>GAP LEADER</th><th>INTERVAL</th><th>LLANTA</th><th>VELOCIDAD</th><th>RPM</th><th>M.</th>
+                                <th></th><th>POS</th><th>+/-</th><th>PILOTO</th><th>Nº</th><th>ESTADO</th><th>GAP LEADER</th><th>INTERVAL</th><th>LLANTA</th><th>VELOCIDAD</th><th>RPM</th><th>M.</th>
                             </tr>
                         </thead>
                         <tbody id="telemetry-table-body"></tbody>
@@ -226,6 +242,7 @@ f1_ultimate_dashboard = """
             </div>
         </div>
 
+        <!-- SECCIÓN DE GRÁFICAS -->
         <div class="bottom-analytics">
             <div class="tabs-container">
                 <button class="tab-btn active" onclick="switchTab('tab-telemetry')">1. Telemetría Cara a Cara (V vs T)</button>
@@ -246,8 +263,7 @@ f1_ultimate_dashboard = """
             <div id="tab-pace" class="tab-content">
                 <div class="chart-controls">
                     <label style="color:#45f3ff;">Filtrar Pilotos:</label>
-                    <div id="pace-checkboxes" class="checkbox-grid">
-                        </div>
+                    <div id="pace-checkboxes" class="checkbox-grid"></div>
                 </div>
                 <div style="flex-grow:1; height:100%;"><canvas id="chartPace"></canvas></div>
             </div>
@@ -286,7 +302,7 @@ f1_ultimate_dashboard = """
                         color: d.team_colour ? `#${d.team_colour}` : '#ffffff',
                         number: d.driver_number,
                         pos: 0, change: '-', tyre: 'UNKNOWN',
-                        speed: 0, rpm: 0, gear: 'N',
+                        speed: 0, rpm: 0, gear: 'N', pitStatus: '1', // NUEVO: Estado de pits inicial por defecto (1 = pista)
                         gapLeader: 'INTERVAL', interval: '-',
                         x: 0, y: 0,
                         telemetryHistory: [], 
@@ -294,7 +310,6 @@ f1_ultimate_dashboard = """
                         overtakePercentage: 15 + Math.random()*40
                     };
 
-                    // Selectores Tab 1
                     let optA = document.createElement('option');
                     optA.value = d.driver_number; optA.innerText = d.name_acronym;
                     if(index === 0) optA.selected = true;
@@ -305,13 +320,9 @@ f1_ultimate_dashboard = """
                     if(index === 1) optB.selected = true;
                     selectB.appendChild(optB);
 
-                    // NUEVO: Checkboxes Tab 2 para la selección manual
                     let label = document.createElement('label');
                     label.className = 'checkbox-item';
-                    
-                    // Activamos por defecto los primeros 4 pilotos de la base de datos
                     let checkedStatus = index < 4 ? 'checked' : '';
-                    
                     label.innerHTML = `
                         <input type="checkbox" value="${d.driver_number}" ${checkedStatus} onchange="updatePaceChartDatasets()">
                         <span style="color: ${drivers[d.driver_number].color}">■</span> ${d.name_acronym}
@@ -358,26 +369,18 @@ f1_ultimate_dashboard = """
                 data: { labels: ['V1','V2','V3','V4','V5','V6','V7','V8','V9','V10'], datasets: [] },
                 options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#334455' } } } }
             });
-            // Generar datasets iniciales mapeados por los checkboxes activos
             updatePaceChartDatasets();
         }
 
-        // NUEVO: Función encargada de actualizar qué pilotos se pintan en la pestaña 2
         function updatePaceChartDatasets() {
             if(!chart2) return;
-            
             const checkedBoxes = document.querySelectorAll('#pace-checkboxes input[type="checkbox"]:checked');
             const selectedDriverNumbers = Array.from(checkedBoxes).map(cb => cb.value);
 
             chart2.data.datasets = selectedDriverNumbers.map(num => {
                 let d = drivers[num];
                 return {
-                    label: d.name,
-                    data: d.paceHistory,
-                    borderColor: d.color,
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.1
+                    label: d.name, data: d.paceHistory, borderColor: d.color, borderWidth: 2, fill: false, tension: 0.1
                 };
             });
             chart2.update('none');
@@ -437,6 +440,7 @@ f1_ultimate_dashboard = """
 
                 stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
 
+                // 3. Telemetría y NUEVO: Extracción de pit_status
                 if(cars && cars.length > 0) {
                     let cache = {};
                     for(let i = cars.length - 1; i >= 0; i--) {
@@ -447,6 +451,8 @@ f1_ultimate_dashboard = """
                                 d.speed = c.speed ?? 0;
                                 d.rpm = c.rpm ?? 0;
                                 d.gear = c.gear ?? 'N';
+                                d.pitStatus = String(c.pit_status ?? '1'); // Guarda '1', '2' o '3'
+                                
                                 d.telemetryHistory.push(c.speed ?? 0);
                                 if(d.telemetryHistory.length > 25) d.telemetryHistory.shift();
                                 cache[c.driver_number] = true;
@@ -491,7 +497,6 @@ f1_ultimate_dashboard = """
         }
 
         function updateChartsRuntime() {
-            // Update Tab 1
             const pANum = document.getElementById('pA-select').value;
             const pBNum = document.getElementById('pB-select').value;
             
@@ -499,23 +504,17 @@ f1_ultimate_dashboard = """
                 chart1.data.datasets[0].label = drivers[pANum].name;
                 chart1.data.datasets[0].borderColor = drivers[pANum].color;
                 chart1.data.datasets[0].data = drivers[pANum].telemetryHistory;
-
                 chart1.data.datasets[1].label = drivers[pBNum].name;
                 chart1.data.datasets[1].borderColor = drivers[pBNum].color;
                 chart1.data.datasets[1].data = drivers[pBNum].telemetryHistory;
-
                 timeLabelCounter++;
                 chart1.data.labels.push('');
                 if(chart1.data.labels.length > 25) chart1.data.labels.shift();
                 chart1.update('none');
             }
 
-            // MODIFICADO: Mapea continuamente los ritmos manteniendo las casillas seleccionadas por el streamer
-            if(chart2) {
-                updatePaceChartDatasets();
-            }
+            if(chart2) { updatePaceChartDatasets(); }
 
-            // Update Tab 3
             if(chart3) {
                 const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
                 chart3.data.labels = list.map(d => d.name);
@@ -542,12 +541,25 @@ f1_ultimate_dashboard = """
                 let displayGap = idx === 0 ? "LEADER" : d.gapLeader;
                 let displayInt = idx === 0 ? "LAP 1" : d.interval;
 
-                html += `<tr>
+                // NUEVO: Evaluación de Clases CSS y Etiquetas de Pits
+                let rowStyleClass = '';
+                let statusBadgeHtml = '<span style="color:#66bb6a;">TRACK</span>'; // Estado por defecto en pista
+
+                if (d.pitStatus === '2') {
+                    rowStyleClass = 'status-pit-lane';
+                    statusBadgeHtml = '<span class="pit-badge badge-lane">PIT LANE</span>'; // Entrando o saliendo
+                } else if (d.pitStatus === '3') {
+                    rowStyleClass = 'status-pit-box';
+                    statusBadgeHtml = '<span class="pit-badge badge-box">IN PIT BOX</span>';  // Detenido con mecánicos
+                }
+
+                html += `<tr class="${rowStyleClass}">
                     <td class="stripe" style="background-color: ${d.color}"></td>
                     <td class="pos">${d.pos}</td>
                     <td class="change ${changeClass}">${d.change}</td>
                     <td>${d.name}</td>
                     <td style="color:#aaa;">#${d.number}</td>
+                    <td>${statusBadgeHtml}</td> <!-- NUEVA COLUMNA INYECTADA -->
                     <td class="gap-txt">${displayGap}</td>
                     <td class="gap-txt" style="color:#aaa;">${displayInt}</td>
                     <td><span class="tyre tyre-${d.tyre}">${tLetter}</span></td>
@@ -598,10 +610,8 @@ f1_ultimate_dashboard = """
 
                     ctx.fillStyle = d.color;
                     ctx.beginPath(); ctx.arc(cx, cy, 7, 0, 2 * Math.PI); ctx.fill();
-
                     ctx.fillStyle = '#000000';
                     ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fill();
-
                     ctx.fillStyle = '#ffffff';
                     ctx.font = '9px sans-serif';
                     ctx.fillText(d.name, cx + 9, cy + 3);
