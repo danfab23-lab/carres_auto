@@ -18,7 +18,6 @@ f1_ultimate_dashboard = """
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <!-- Importar Chart.js para las gráficas de alta fidelidad -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
@@ -42,7 +41,6 @@ f1_ultimate_dashboard = """
             gap: 10px;
         }
 
-        /* BARRA DE CLIMA SUPERIOR */
         .weather-bar {
             background-color: #1f2833;
             border: 1px solid #45f3ff33;
@@ -56,7 +54,6 @@ f1_ultimate_dashboard = """
         .weather-item { display: flex; align-items: center; gap: 8px; }
         .weather-val { color: #45f3ff; }
 
-        /* SECCIÓN SUPERIOR: TIMING Y MAPA */
         .top-grid {
             display: grid;
             grid-template-columns: 1.2fr 0.8fr;
@@ -64,7 +61,6 @@ f1_ultimate_dashboard = """
             height: 45vh;
         }
         
-        /* SECCIÓN INFERIOR: PANEL DE GRÁFICAS MULTIPESTAÑA */
         .bottom-analytics {
             background-color: #1f2833;
             border: 1px solid #45f3ff33;
@@ -130,7 +126,6 @@ f1_ultimate_dashboard = """
         }
         canvas { max-width: 100%; max-height: 100%; }
 
-        /* CONTROLES DE PESTAÑAS (TABS) */
         .tabs-container {
             display: flex;
             gap: 10px;
@@ -220,7 +215,6 @@ f1_ultimate_dashboard = """
                 <button class="tab-btn" onclick="switchTab('tab-overtake')">3. Despliegue de Potencia (Overtake Mode)</button>
             </div>
 
-            <!-- GRAFICA 1: CARA A CARA -->
             <div id="tab-telemetry" class="tab-content active">
                 <div class="chart-controls">
                     <label>Piloto A:</label>
@@ -231,12 +225,10 @@ f1_ultimate_dashboard = """
                 <div style="flex-grow:1; height:100%;"><canvas id="chartTelemetry"></canvas></div>
             </div>
 
-            <!-- GRAFICA 2: RACE PACE -->
             <div id="tab-pace" class="tab-content">
                 <div style="flex-grow:1; height:100%;"><canvas id="chartPace"></canvas></div>
             </div>
 
-            <!-- GRAFICA 3: OVERTAKE MODE -->
             <div id="tab-overtake" class="tab-content">
                 <div style="flex-grow:1; height:100%;"><canvas id="chartOvertake"></canvas></div>
             </div>
@@ -253,7 +245,6 @@ f1_ultimate_dashboard = """
         let trackPoints = []; 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
-        // Instancias Globals de las Gráficas
         let chart1, chart2, chart3;
         let timeLabelCounter = 0;
 
@@ -275,11 +266,10 @@ f1_ultimate_dashboard = """
                         gapLeader: 'INTERVAL', interval: '-',
                         x: 0, y: 0,
                         telemetryHistory: [], 
-                        paceHistory: Array.from({length: 10}, () => 80 + Math.random()*5), // Simulación inicial base ritmos
+                        paceHistory: Array.from({length: 10}, () => 80 + Math.random()*5), 
                         overtakePercentage: 15 + Math.random()*40
                     };
 
-                    // Alimentar los selectores de pilotos para el cara a cara
                     let optA = document.createElement('option');
                     optA.value = d.driver_number; optA.innerText = d.name_acronym;
                     if(index === 0) optA.selected = true;
@@ -291,7 +281,6 @@ f1_ultimate_dashboard = """
                     selectB.appendChild(optB);
                 });
 
-                // Inicializar esqueletos de Chart.js
                 initTelemetryChart();
                 initPaceChart();
                 initOvertakeChart();
@@ -304,7 +293,6 @@ f1_ultimate_dashboard = """
             } catch (e) { console.error(e); }
         }
 
-        // CONTROLADOR DE PESTAÑAS
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -312,7 +300,6 @@ f1_ultimate_dashboard = """
             event.target.classList.add('active');
         }
 
-        // --- INICIALIZADORES DE GRÁFICAS ---
         function initTelemetryChart() {
             if(chart1) chart1.destroy();
             const ctx = document.getElementById('chartTelemetry').getContext('2d');
@@ -375,7 +362,6 @@ f1_ultimate_dashboard = """
                 const locations = await locRes.json();
                 const intervals = await intRes.json();
 
-                // 1. Tiempos y Posición
                 positions.forEach(p => {
                     let d = drivers[p.driver_number];
                     if (d) {
@@ -388,10 +374,8 @@ f1_ultimate_dashboard = """
                     }
                 });
 
-                // 2. Compuestos
                 stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
 
-                // 3. Telemetría e Historial de Gráficas
                 if(cars && cars.length > 0) {
                     let cache = {};
                     for(let i = cars.length - 1; i >= 0; i--) {
@@ -402,18 +386,14 @@ f1_ultimate_dashboard = """
                                 d.speed = c.speed ?? 0;
                                 d.rpm = c.rpm ?? 0;
                                 d.gear = c.gear ?? 'N';
-                                
-                                // Guardar registro para gráficos de líneas
                                 d.telemetryHistory.push(c.speed ?? 0);
                                 if(d.telemetryHistory.length > 25) d.telemetryHistory.shift();
-                                
                                 cache[c.driver_number] = true;
                             }
                         }
                     }
                 }
 
-                // 4. Gaps
                 if(intervals && intervals.length > 0) {
                     intervals.forEach(i => {
                         let d = drivers[i.driver_number];
@@ -424,7 +404,6 @@ f1_ultimate_dashboard = """
                     });
                 }
 
-                // 5. GPS
                 locations.forEach(l => {
                     let d = drivers[l.driver_number];
                     if(d) {
@@ -450,9 +429,7 @@ f1_ultimate_dashboard = """
             } catch (e) { console.warn(e); }
         }
 
-        // --- ACTUALIZADOR DE GRÁFICAS EN TIEMPO REAL ---
         function updateChartsRuntime() {
-            // 1. Update Telemetría Cara a Cara
             const pANum = document.getElementById('pA-select').value;
             const pBNum = document.getElementById('pB-select').value;
             
@@ -471,7 +448,6 @@ f1_ultimate_dashboard = """
                 chart1.update('none');
             }
 
-            // 2. Update Race Pace Chart (Top 4 ordenados)
             if(chart2) {
                 const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos).slice(0, 4);
                 chart2.data.datasets = list.map(d => ({
@@ -484,12 +460,10 @@ f1_ultimate_dashboard = """
                 chart2.update('none');
             }
 
-            // 3. Update Overtake Mode (Gráfica de barras horizontales/verticales de todos)
             if(chart3) {
                 const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
                 chart3.data.labels = list.map(d => d.name);
                 chart3.data.datasets[0].data = list.map(d => {
-                    // Simular descarga/uso del manual override si va a más de 300 km/h
                     if(d.speed > 290) d.overtakePercentage = Math.max(0, d.overtakePercentage - 0.4);
                     else d.overtakePercentage = Math.min(100, d.overtakePercentage + 0.1);
                     return d.overtakePercentage.toFixed(1);
@@ -529,6 +503,7 @@ f1_ultimate_dashboard = """
             tbody.innerHTML = html;
         }
 
+        // --- CÓDIGO ACTUALIZADO: AUTOCENTRADO MATEMÁTICO DEL MAPA ---
         function drawMap() {
             const canvas = document.getElementById('trackMap');
             const ctx = canvas.getContext('2d');
@@ -536,14 +511,27 @@ f1_ultimate_dashboard = """
 
             if (trackPoints.length === 0) return;
 
+            // Margen de seguridad interno en el lienzo
             const padding = 25;
+            
+            // 1. Calcular la escala base para mantener la relación de aspecto geométrica
             const scaleX = (canvas.width - padding * 2) / (maxX - minX || 1);
             const scaleY = (canvas.height - padding * 2) / (maxY - minY || 1);
             const scale = Math.min(scaleX, scaleY);
 
-            const toCanvasX = (x) => padding + (x - minX) * scale;
-            const toCanvasY = (y) => canvas.height - padding - (y - minY) * scale;
+            // 2. Calcular los tamaños reales que ocupará la pista dibujada
+            const trackWidthInCanvas = (maxX - minX) * scale;
+            const trackHeightInCanvas = (maxY - minY) * scale;
 
+            // 3. Obtener el desfase (offset) exacto para centrar horizontal y verticalmente
+            const offsetX = (canvas.width - trackWidthInCanvas) / 2;
+            const offsetY = (canvas.height - trackHeightInCanvas) / 2;
+
+            // 4. Funciones de conversión cartesianas calibradas al centro
+            const toCanvasX = (x) => offsetX + (x - minX) * scale;
+            const toCanvasY = (y) => canvas.height - offsetY - (y - minY) * scale;
+
+            // Dibujar trazado gris
             ctx.strokeStyle = '#2f3e46';
             ctx.lineWidth = 5;
             ctx.beginPath();
@@ -555,6 +543,7 @@ f1_ultimate_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
+            // Dibujar burbujas de los pilotos centraditas
             Object.values(drivers).forEach(d => {
                 if (d.x && d.y && d.pos > 0) {
                     const cx = toCanvasX(d.x);
@@ -595,11 +584,9 @@ elif session_mode == "Clasificación (Qualy)":
 else:
     session_id = "latest"  
 
-# Inyectar la variable de control al script asíncrono
 dashboard_completo = f1_ultimate_dashboard.replace(
     "const SESSION_KEY = 'latest';", 
     f"const SESSION_KEY = '{session_id}';"
 )
 
-# Ajuste automático del tamaño del canvas HTML5
 st.components.v1.html(dashboard_completo, height=920, scrolling=True)
