@@ -174,7 +174,7 @@ f1_desktop_dashboard = """
     </div>
 
     <script>
-        const SESSION_KEY = 'latest'; // Cambia por IDs específicos en pruebas si está offline
+        const SESSION_KEY = '9535'; // Cambia por IDs específicos en pruebas si está offline
         const API_URL = 'https://api.openf1.org/v1';
         
         let drivers = {};
