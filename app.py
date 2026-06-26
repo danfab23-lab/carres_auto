@@ -176,7 +176,6 @@ f1_ultimate_dashboard = """
 <body>
 
     <div class="main-layout">
-        <!-- CLIMA -->
         <div class="weather-bar">
             <div class="weather-item">🌧️ LLUVIA: <span id="w-rain" class="weather-val">0%</span></div>
             <div class="weather-item">🌡️ AIRE: <span id="w-air" class="weather-val">--°C</span></div>
@@ -185,7 +184,6 @@ f1_ultimate_dashboard = """
             <div class="weather-item">💧 HUMEDAD: <span id="w-hum" class="weather-val">--%</span></div>
         </div>
 
-        <!-- TIMING MASTER Y GPS MAP -->
         <div class="top-grid">
             <div class="panel">
                 <header><h2>LIVE TELEMETRY & TIMING MASTER</h2></header>
@@ -207,7 +205,6 @@ f1_ultimate_dashboard = """
             </div>
         </div>
 
-        <!-- MULTIGRAFICAS DE INGENIERÍA -->
         <div class="bottom-analytics">
             <div class="tabs-container">
                 <button class="tab-btn active" onclick="switchTab('tab-telemetry')">1. Telemetría Cara a Cara (V vs T)</button>
@@ -503,7 +500,6 @@ f1_ultimate_dashboard = """
             tbody.innerHTML = html;
         }
 
-        // --- CÓDIGO ACTUALIZADO: AUTOCENTRADO MATEMÁTICO DEL MAPA ---
         function drawMap() {
             const canvas = document.getElementById('trackMap');
             const ctx = canvas.getContext('2d');
@@ -511,27 +507,27 @@ f1_ultimate_dashboard = """
 
             if (trackPoints.length === 0) return;
 
-            // Margen de seguridad interno en el lienzo
-            const padding = 25;
+            // REDISEÑO: Añadido margen estricto para evitar recortes en los bordes
+            const canvasPadding = 60; 
             
-            // 1. Calcular la escala base para mantener la relación de aspecto geométrica
-            const scaleX = (canvas.width - padding * 2) / (maxX - minX || 1);
-            const scaleY = (canvas.height - padding * 2) / (maxY - minY || 1);
+            // 1. Calcular escala base usando las dimensiones con margen restado
+            const scaleX = (canvas.width - canvasPadding * 2) / (maxX - minX || 1);
+            const scaleY = (canvas.height - canvasPadding * 2) / (maxY - minY || 1);
             const scale = Math.min(scaleX, scaleY);
 
-            // 2. Calcular los tamaños reales que ocupará la pista dibujada
+            // 2. Dimensiones finales de la pista escalada en la pantalla
             const trackWidthInCanvas = (maxX - minX) * scale;
             const trackHeightInCanvas = (maxY - minY) * scale;
 
-            // 3. Obtener el desfase (offset) exacto para centrar horizontal y verticalmente
+            // 3. Centrado perfecto distribuyendo el espacio muerto sobrante en divisiones simétricas
             const offsetX = (canvas.width - trackWidthInCanvas) / 2;
             const offsetY = (canvas.height - trackHeightInCanvas) / 2;
 
-            // 4. Funciones de conversión cartesianas calibradas al centro
+            // 4. Transformación matemática calibrada de coordenadas
             const toCanvasX = (x) => offsetX + (x - minX) * scale;
             const toCanvasY = (y) => canvas.height - offsetY - (y - minY) * scale;
 
-            // Dibujar trazado gris
+            // Trazado del asfalto
             ctx.strokeStyle = '#2f3e46';
             ctx.lineWidth = 5;
             ctx.beginPath();
@@ -543,7 +539,7 @@ f1_ultimate_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
-            // Dibujar burbujas de los pilotos centraditas
+            // Ubicaciones de los monoplazas centraditos y encajados
             Object.values(drivers).forEach(d => {
                 if (d.x && d.y && d.pos > 0) {
                     const cx = toCanvasX(d.x);
