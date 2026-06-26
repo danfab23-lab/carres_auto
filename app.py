@@ -236,7 +236,7 @@ f1_ultimate_dashboard = """
             </div>
 
             <div class="panel">
-                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">GENERANDO TRAZADO FINO...</div></header>
+                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">CIRCUITO PRECARGADO OK</div></header>
                 <div class="map-wrapper"><canvas id="trackMap" width="500" height="350"></canvas></div>
             </div>
         </div>
@@ -279,14 +279,42 @@ f1_ultimate_dashboard = """
         
         let drivers = {};
         let positionHistory = {}; 
-        let circuitLoaded = false;
         let trackPoints = []; 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
         let chart1, chart2, chart3;
         let timeLabelCounter = 0;
 
+        // BASE DE DATOS DE TRAZADOS INTEGRADA (Añadido Red Bull Ring de Austria)
+        const CIRCUITO_PLANTILLAS = {
+            "AUSTRIA": [
+                {x: 400, y: 1500}, {x: 350, y: 2200}, {x: 700, y: 2800}, {x: 1500, y: 2750}, 
+                {x: 2100, y: 2400}, {x: 2350, y: 1800}, {x: 1900, y: 1300}, {x: 1300, y: 950}, 
+                {x: 850, y: 900}, {x: 550, y: 1100}
+            ],
+            "BARCELONA": [
+                {x:1200, y:2500}, {x:1800, y:2800}, {x:2500, y:2900}, {x:3200, y:2700}, {x:3600, y:2200}, 
+                {x:3500, y:1500}, {x:2900, y:1100}, {x:2200, y:1000}, {x:1500, y:1300}, {x:900, y:1800}
+            ],
+            "MONZA": [
+                {x:1180, y:4300}, {x:1420, y:4900}, {x:1850, y:5200}, {x:2300, y:4800}, {x:2600, y:4100}, 
+                {x:2500, y:3100}, {x:2100, y:2200}, {x:1650, y:1450}, {x:1100, y:1900}, {x:950, y:2900}
+            ]
+        };
+
+        function cargarTrazadoEstatico(nombreCircuito) {
+            trackPoints = CIRCUITO_PLANTILLAS[nombreCircuito] || CIRCUITO_PLANTILLAS["AUSTRIA"];
+            minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+            trackPoints.forEach(pt => {
+                if (pt.x < minX) minX = pt.x; if (pt.x > maxX) maxX = pt.x;
+                if (pt.y < minY) minY = pt.y; if (pt.y > maxY) maxY = pt.y;
+            });
+        }
+
         async function init() {
+            // Austria por defecto
+            cargarTrazadoEstatico("AUSTRIA");
+
             try {
                 const res = await fetch(`${API_URL}/drivers?session_key=${SESSION_KEY}`);
                 const data = await res.json();
@@ -300,13 +328,13 @@ f1_ultimate_dashboard = """
                         name: d.name_acronym,
                         color: d.team_colour ? `#${d.team_colour}` : '#ffffff',
                         number: d.driver_number,
-                        pos: 0, change: '-', tyre: 'UNKNOWN',
+                        pos: index + 1, change: '-', tyre: 'MEDIUM',
                         speed: 0, rpm: 0, gear: 'N', pitStatus: '1',
                         gapLeader: 'INTERVAL', interval: '-',
                         x: 0, y: 0,
                         telemetryHistory: [], 
-                        paceHistory: Array.from({length: 10}, () => 80 + Math.random()*4), 
-                        overtakePercentage: 15 + Math.random()*40
+                        paceHistory: Array.from({length: 10}, () => 65 + Math.random()*3), // Tiempos más cortos para Austria (~65s)
+                        overtakePercentage: 40 + Math.random()*50
                     };
 
                     let optA = document.createElement('option');
@@ -378,10 +406,10 @@ f1_ultimate_dashboard = """
 
             chart2.data.datasets = selectedDriverNumbers.map(num => {
                 let d = drivers[num];
-                return {
+                return d ? {
                     label: d.name, data: d.paceHistory, borderColor: d.color, borderWidth: 2, fill: false, tension: 0.1
-                };
-            });
+                } : null;
+            }).filter(dataset => dataset !== null);
             chart2.update('none');
         }
 
@@ -420,24 +448,28 @@ f1_ultimate_dashboard = """
                 ]);
 
                 const positions = await posRes.json();
-                const stints = await stintsRes.json();
+                const stints = await stintRes.json();
                 const cars = await carRes.json();
                 const locations = await locRes.json();
                 const intervals = await intRes.json();
 
-                positions.forEach(p => {
-                    let d = drivers[p.driver_number];
-                    if (d) {
-                        if (positionHistory[p.driver_number] !== undefined && positionHistory[p.driver_number] !== p.position) {
-                            let diff = positionHistory[p.driver_number] - p.position;
-                            d.change = diff > 0 ? `+${diff}` : `${diff}`;
+                if (positions && positions.length > 0) {
+                    positions.forEach(p => {
+                        let d = drivers[p.driver_number];
+                        if (d) {
+                            if (positionHistory[p.driver_number] !== undefined && positionHistory[p.driver_number] !== p.position) {
+                                let diff = positionHistory[p.driver_number] - p.position;
+                                d.change = diff > 0 ? `+${diff}` : `${diff}`;
+                            }
+                            d.pos = p.position;
+                            positionHistory[p.driver_number] = p.position;
                         }
-                        d.pos = p.position;
-                        positionHistory[p.driver_number] = p.position;
-                    }
-                });
+                    });
+                }
 
-                stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
+                if (stints && stints.length > 0) {
+                    stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
+                }
 
                 if(cars && cars.length > 0) {
                     let cache = {};
@@ -450,7 +482,6 @@ f1_ultimate_dashboard = """
                                 d.rpm = c.rpm ?? 0;
                                 d.gear = c.gear ?? 'N';
                                 d.pitStatus = String(c.pit_status ?? '1');
-                                
                                 d.telemetryHistory.push(c.speed ?? 0);
                                 if(d.telemetryHistory.length > 25) d.telemetryHistory.shift();
                                 cache[c.driver_number] = true;
@@ -469,26 +500,14 @@ f1_ultimate_dashboard = """
                     });
                 }
 
-                // NUEVO ALGORITMO: Capturar trazo fino basándonos preferentemente en un solo auto (Líder o coche regular)
-                locations.forEach(l => {
-                    let d = drivers[l.driver_number];
-                    if(d) {
-                        d.x = l.x; 
-                        d.y = l.y;
-                        
-                        // Limitamos la captura para armar el mapa usando datos limpios de un solo auto (evita el manchón masivo)
-                        if (!circuitLoaded && l.x && l.y && (l.driver_number == '1' || l.driver_number == '4' || trackPoints.length < 150)) {
-                            trackPoints.push({x: l.x, y: l.y});
-                            if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x;
-                            if (l.y < minY) minY = l.y; if (l.y > maxY) maxY = l.y;
+                if(locations && locations.length > 0) {
+                    locations.forEach(l => {
+                        let d = drivers[l.driver_number];
+                        if(d) {
+                            d.x = l.x; 
+                            d.y = l.y;
                         }
-                    }
-                });
-
-                // Detener la acumulación cuando el mapa sea estable para congelar el trazado lineal elegante
-                if (trackPoints.length > 180) { 
-                    circuitLoaded = true; 
-                    document.getElementById('circuit-status').innerText = "TRAZADO FIJO OK"; 
+                    });
                 }
 
                 renderTable();
@@ -518,20 +537,16 @@ f1_ultimate_dashboard = """
             if(chart2) { updatePaceChartDatasets(); }
 
             if(chart3) {
-                const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
+                const list = Object.values(drivers).sort((a,b) => a.pos - b.pos);
                 chart3.data.labels = list.map(d => d.name);
-                chart3.data.datasets[0].data = list.map(d => {
-                    if(d.speed > 290) d.overtakePercentage = Math.max(0, d.overtakePercentage - 0.4);
-                    else d.overtakePercentage = Math.min(100, d.overtakePercentage + 0.1);
-                    return d.overtakePercentage.toFixed(1);
-                });
+                chart3.data.datasets[0].data = list.map(d => d.overtakePercentage.toFixed(1));
                 chart3.update('none');
             }
         }
 
         function renderTable() {
             const tbody = document.getElementById('telemetry-table-body');
-            const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
+            const list = Object.values(drivers).sort((a,b) => a.pos - b.pos);
             
             let html = '';
             list.forEach((d, idx) => {
@@ -593,9 +608,8 @@ f1_ultimate_dashboard = """
             const toCanvasX = (x) => offsetX + (x - minX) * scale;
             const toCanvasY = (y) => canvas.height - offsetY - (y - minY) * scale;
 
-            // REDISEÑO: Dibujar el trazado fino fijos estilo línea de circuito oficial
             ctx.strokeStyle = '#3a4f5c';
-            ctx.lineWidth = 3;  // Reducido de 5 a 3 para máxima elegancia
+            ctx.lineWidth = 3;  
             ctx.beginPath();
             for(let i=0; i<trackPoints.length; i++) {
                 let pt = trackPoints[i];
@@ -605,9 +619,8 @@ f1_ultimate_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
-            // Ubicaciones de los monoplazas deslizándose exactamente encima de la línea fija
             Object.values(drivers).forEach(d => {
-                if (d.x && d.y && d.pos > 0) {
+                if (d.x && d.y) {
                     const cx = toCanvasX(d.x);
                     const cy = toCanvasY(d.y);
 
@@ -635,18 +648,22 @@ session_mode = st.sidebar.selectbox(
     ["Simulación (Datos Históricos)", "Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
 )
 
+circuito_a_narrar = st.sidebar.selectbox(
+    "Circuito del Fin de Semana:",
+    ["Austria", "Barcelona", "Monza"]
+)
+
 if session_mode == "Simulación (Datos Históricos)":
     session_id = "9535" 
-elif session_mode == "Práctica 3":
-    session_id = "latest"  
-elif session_mode == "Clasificación (Qualy)":
-    session_id = "latest"  
 else:
     session_id = "latest"  
 
 dashboard_completo = f1_ultimate_dashboard.replace(
     "const SESSION_KEY = 'latest';", 
     f"const SESSION_KEY = '{session_id}';"
+).replace(
+    'cargarTrazadoEstatico("AUSTRIA");',
+    f'cargarTrazadoEstatico("{circuito_a_narrar.upper()}");'
 )
 
 st.components.v1.html(dashboard_completo, height=920, scrolling=True)
