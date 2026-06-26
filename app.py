@@ -3,7 +3,7 @@ import streamlit as st
 # Configuración obligatoria para Pantalla Completa en Escritorio
 st.set_page_config(page_title="F1 Team Command Center", layout="wide")
 
-# Limpieza total del entorno Streamlit para que parezca una app nativa
+# Limpieza total del entorno Streamlit para que parezca una app nativa de ingeniería
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -14,6 +14,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Plantilla Maestra en HTML, CSS y JavaScript para el Dashboard de Transmisión
 f1_desktop_dashboard = """
 <!DOCTYPE html>
 <html lang="es">
@@ -34,7 +35,7 @@ f1_desktop_dashboard = """
             overflow: hidden;
             padding: 15px;
         }
-        /* Contenedor Principal en Grid Horizontal (Pantallas anchas) */
+        /* Contenedor Principal en Grid Horizontal (Pantallas de Escritorio) */
         .dashboard-container {
             display: grid;
             grid-template-columns: 1.1fr 0.9fr;
@@ -42,7 +43,7 @@ f1_desktop_dashboard = """
             height: calc(100vh - 30px);
         }
         
-        /* PANALES IZQUIERDO Y DERECHO */
+        /* PANELES DE CONTROL */
         .panel {
             background-color: #1f2833;
             border-radius: 10px;
@@ -117,7 +118,7 @@ f1_desktop_dashboard = """
         
         .telemetry-txt { color: #00ffcc; font-family: monospace; }
 
-        /* SECCIÓN DEL MAPA */
+        /* SECCIÓN DEL TRAZADO GPS */
         .map-wrapper {
             flex-grow: 1;
             display: flex;
@@ -136,6 +137,7 @@ f1_desktop_dashboard = """
 <body>
 
     <div class="dashboard-container">
+        <!-- PANEL IZQUIERDO: TABLA DE TIEMPOS Y MOTOR -->
         <div class="panel">
             <header>
                 <h2>TELEMETRY & TIMING</h2>
@@ -157,11 +159,13 @@ f1_desktop_dashboard = """
                         </tr>
                     </thead>
                     <tbody id="telemetry-table-body">
-                        </tbody>
+                        <!-- Inyección vía JS -->
+                    </tbody>
                 </table>
             </div>
         </div>
 
+        <!-- PANEL DERECHO: CIRCUITO EN VIVO -->
         <div class="panel">
             <header>
                 <h2>GPS LIVE TRACK MAP</h2>
@@ -174,20 +178,19 @@ f1_desktop_dashboard = """
     </div>
 
     <script>
-        const SESSION_KEY = '9535'; // Cambia por IDs específicos en pruebas si está offline
+        const SESSION_KEY = 'latest'; // Reemplazado dinámicamente por Python
         const API_URL = 'https://api.openf1.org/v1';
         
         let drivers = {};
-        let positionHistory = {}; // Para calcular el cambio de posición (+/-)
+        let positionHistory = {}; 
         let circuitLoaded = false;
         
-        // Almacenes de mapeo de coordenadas
         let trackPoints = []; 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
         async function init() {
             try {
-                // Descargar datos fijos de los pilotos
+                // Obtener base de datos de pilotos registrados
                 const res = await fetch(`${API_URL}/drivers?session_key=${SESSION_KEY}`);
                 const data = await res.json();
                 data.forEach(d => {
@@ -205,15 +208,14 @@ f1_desktop_dashboard = """
                     };
                 });
 
-                // Carga inicial y bucle en vivo cada 1.5 segundos
+                // Ejecución inmediata y actualización continua cada 1.5 segundos
                 tick();
                 setInterval(tick, 1500);
-            } catch (e) { console.error("Error al arrancar telemetría:", e); }
+            } catch (e) { console.error("Error al iniciar flujo:", e); }
         }
 
         async function tick() {
             try {
-                // Hacer las peticiones simultáneas de Posición, Neumáticos, Datos del coche y Localización GPS
                 const [posRes, stintRes, carRes, locRes] = await Promise.all([
                     fetch(`${API_URL}/position?session_key=${SESSION_KEY}`),
                     fetch(`${API_URL}/stints?session_key=${SESSION_KEY}`),
@@ -226,12 +228,12 @@ f1_desktop_dashboard = """
                 const cars = await carRes.json();
                 const locations = await locRes.json();
 
-                // 1. Procesar Cambios de Posición (+/-)
+                // 1. Cambios de posición (+/-)
                 positions.forEach(p => {
                     let d = drivers[p.driver_number];
                     if (d) {
                         if (positionHistory[p.driver_number] !== undefined && positionHistory[p.driver_number] !== p.position) {
-                            let diff = positionHistory[p.driver_number] - p.position; // Viejo - Nuevo
+                            let diff = positionHistory[p.driver_number] - p.position;
                             d.change = diff > 0 ? `+${diff}` : `${diff}`;
                         }
                         d.pos = p.position;
@@ -239,22 +241,20 @@ f1_desktop_dashboard = """
                     }
                 });
 
-                // 2. Procesar Compuestos (Llantas)
+                // 2. Compuestos de Neumáticos
                 stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
 
-                // 3. Procesar Telemetría del motor (Velocidad instantánea)
-                // Tomamos las últimas muestras leyendo el arreglo al revés para optimizar
+                // 3. Telemetría instantánea de motor
                 cars.forEach(c => {
                     let d = drivers[c.driver_number];
                     if(d) { d.speed = c.speed; d.rpm = c.rpm; d.gear = c.gear; }
                 });
 
-                // 4. Procesar Ubicaciones GPS (Coordenadas X, Y)
+                // 4. Mapeo cartesiano GPS
                 locations.forEach(l => {
                     let d = drivers[l.driver_number];
                     if(d) {
                         d.x = l.x; d.y = l.y;
-                        // Si no hemos mapeado el circuito, acumulamos coordenadas para calibrar el Canvas
                         if (!circuitLoaded && l.x && l.y) {
                             trackPoints.push({x: l.x, y: l.y});
                             if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x;
@@ -263,17 +263,19 @@ f1_desktop_dashboard = """
                     }
                 });
 
-                if (trackPoints.length > 500) { circuitLoaded = true; document.getElementById('circuit-name').innerText = "CIRCUITO MAPS OK"; }
+                if (trackPoints.length > 500) { 
+                    circuitLoaded = true; 
+                    document.getElementById('circuit-name').innerText = "CIRCUITO MAPS OK"; 
+                }
 
                 renderTable();
                 drawMap();
 
-            } catch (e) { console.warn("Sincronizando flujo...", e); }
+            } catch (e) { console.warn("Sincronizando...", e); }
         }
 
         function renderTable() {
             const tbody = document.getElementById('telemetry-table-body');
-            // Filtrar y ordenar pilotos que tengan posición asignada
             const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
             
             let html = '';
@@ -306,21 +308,18 @@ f1_desktop_dashboard = """
 
             if (trackPoints.length === 0) return;
 
-            // Función para escalar los puntos cartesianos de la F1 al tamaño del Canvas del navegador
             const padding = 40;
             const scaleX = (canvas.width - padding * 2) / (maxX - minX || 1);
             const scaleY = (canvas.height - padding * 2) / (maxY - minY || 1);
-            const scale = Math.min(scaleX, scaleY); // Mantener la proporción geométrica perfecta del circuito
+            const scale = Math.min(scaleX, scaleY);
 
             const toCanvasX = (x) => padding + (x - minX) * scale;
-            // Invertir Y para que las curvas vayan hacia el lado correcto (F1 usa el estándar de ingeniería)
             const toCanvasY = (y) => canvas.height - padding - (y - minY) * scale;
 
-            // 1. Dibujar la línea gris del circuito
+            // Dibujar la línea de la pista
             ctx.strokeStyle = '#334455';
             ctx.lineWidth = 4;
             ctx.beginPath();
-            // Para no pintar miles de puntos, tomamos muestras espaciadas si estamos cargando
             for(let i=0; i<trackPoints.length; i+=5) {
                 let pt = trackPoints[i];
                 if(i===0) ctx.moveTo(toCanvasX(pt.x), toCanvasY(pt.y));
@@ -329,25 +328,22 @@ f1_desktop_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
-            // 2. Dibujar las burbujas de los pilotos sobre el circuito
+            // Dibujar telemetría de posición de monoplazas
             Object.values(drivers).forEach(d => {
                 if (d.x && d.y && d.pos > 0) {
                     const cx = toCanvasX(d.x);
                     const cy = toCanvasY(d.y);
 
-                    // Círculo exterior con el color de su equipo
                     ctx.fillStyle = d.color;
                     ctx.beginPath();
                     ctx.arc(cx, cy, 9, 0, 2 * Math.PI);
                     ctx.fill();
 
-                    // Núcleo negro
                     ctx.fillStyle = '#000000';
                     ctx.beginPath();
                     ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
                     ctx.fill();
 
-                    // Siglas del piloto en texto flotante al lado
                     ctx.fillStyle = '#ffffff';
                     ctx.font = '10px monospace';
                     ctx.fillText(d.name, cx + 12, cy + 3);
@@ -361,5 +357,28 @@ f1_desktop_dashboard = """
 </html>
 """
 
-# Inyectamos el Dashboard en formato completo de pantalla horizontal
-st.components.v1.html(f1_desktop_dashboard, scrolling=False)
+# CONTROLES FLUIDOS EN PYTHON (STREAMLIT SIDEBAR)
+st.sidebar.title("🎛️ Centro de Control Live")
+evento = st.sidebar.selectbox(
+    "Sesión para el directo:",
+    ["Prueba Histórica (Ver simulación)", "Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
+)
+
+# Selector lógico para cambiar los IDs en caliente sin tumbar el stream
+if evento == "Prueba Histórica (Ver simulación)":
+    session_id = "9535"  # ID de carrera completa con datos válidos para testear trazado
+elif evento == "Práctica 3":
+    session_id = "latest"  # Conecta automáticamente en el horario de la P3
+elif evento == "Clasificación (Qualy)":
+    session_id = "latest"  # Conecta automáticamente al iniciar la Qualy
+else:
+    session_id = "latest"  # Conecta automáticamente al iniciar el GP
+
+# Inyección segura del parámetro string al motor de JS
+dashboard_listo = f1_desktop_dashboard.replace(
+    "const SESSION_KEY = 'latest';", 
+    f"const SESSION_KEY = '{session_id}';"
+)
+
+# Renderizado horizontal con scroll deshabilitado
+st.components.v1.html(dashboard_listo, scrolling=False)
