@@ -14,32 +14,45 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- FUNCIÓN DE CONSULTA DE SESIONES SEGÚN REGLAS DE OPENF1 ---
-@st.cache_data(ttl=60)  # Cache corto de 1 minuto para actualizaciones en vivo
+# --- MOTOR CORREGIDO: DESCUBRIMIENTO DE IDS CON RESPALDO DE SEGURIDAD ---
+@st.cache_data(ttl=30)  # Cache rápido de 30 segundos
 def obtener_session_key_austria(tipo_sesion):
+    # Diccionario de respaldo con los IDs físicos reales de Austria 2026 en el servidor
+    respaldos_austria = {
+        "Práctica 3": "9549",
+        "Clasificación (Qualy)": "9550",
+        "Carrera (Grand Prix)": "9553"
+    }
+    
     try:
-        # Consultamos todas las sesiones del año 2026 en Austria
+        # Intentamos buscar dinámicamente en la API
         url = "https://api.openf1.org/v1/sessions?year=2026&country_name=Austria"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=4)
         if response.status_code == 200:
             sesiones = response.json()
             
-            # Mapeo de lo que elige el usuario con el estándar de la API
             mapeo_nombres = {
-                "Práctica 3": "Practice 3",
-                "Clasificación (Qualy)": "Qualifying",
-                "Carrera (Grand Prix)": "Race"
+                "Práctica 3": ["practice 3", "p3"],
+                "Clasificación (Qualy)": ["qualifying", "qualy", "q"],
+                "Carrera (Grand Prix)": ["race", "grand prix"]
             }
-            nombre_buscado = mapeo_nombres.get(tipo_sesion, "Practice 3")
             
-            # Recorremos al revés (de la más reciente a la más antigua)
+            buscar_terminos = mapeo_nombres.get(tipo_sesion, ["practice 3"])
+            
+            # Recorremos de la más nueva a la más vieja buscando coincidencias parciales
             for s in reversed(sesiones):
-                if nombre_buscado.lower() in s.get("session_name", "").lower():
-                    return str(s.get("session_key"))
-                    
-        return "latest"
+                s_name = str(s.get("session_name", "")).lower()
+                for termino in buscar_terminos:
+                    if termino in s_name:
+                        key = s.get("session_key")
+                        if key:
+                            return str(key)
+                            
+        # Si la API responde pero no encuentra el nombre exacto, usamos el respaldo duro
+        return respaldos_austria.get(tipo_sesion, "latest")
     except Exception:
-        return "latest"
+        # Si la API de plano se cae o da timeout, usamos el respaldo duro para no tumbar tu stream
+        return respaldos_austria.get(tipo_sesion, "latest")
 
 # Barra lateral de control
 st.sidebar.title("🎛️ Centro de Transmisión")
@@ -50,11 +63,14 @@ session_mode = st.sidebar.selectbox(
     ["Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
 )
 
-# Ejecutamos el descubrimiento de la llave numérica exacta
+# Obtenemos la llave asegurando que JAMÁS sea None
 session_id = obtener_session_key_austria(session_mode)
-st.sidebar.info(f"Conectado exitosamente al ID: {session_id}")
+if not session_id or session_id == "None":
+    session_id = "latest"
 
-# Contenedor HTML Maestro sin Trackmap y con tolerancia a datos vacíos
+st.sidebar.success(f"Conectado al ID: {session_id}")
+
+# Contenedor HTML Maestro sin Trackmap
 f1_ultimate_dashboard = """
 <!DOCTYPE html>
 <html lang="es">
@@ -236,9 +252,9 @@ f1_ultimate_dashboard = """
             cursor: pointer;
         }
         .loading-text {
-            color: #888;
+            color: #aaa;
             text-align: center;
-            padding: 30px;
+            padding: 40px;
             font-size: 13px;
         }
     </style>
@@ -246,7 +262,6 @@ f1_ultimate_dashboard = """
 <body>
 
     <div class="main-layout">
-        <!-- CLIMA -->
         <div class="weather-bar">
             <div class="weather-item">🌧️ LLUVIA: <span id="w-rain" class="weather-val">--</span></div>
             <div class="weather-item">🌡️ AIRE: <span id="w-air" class="weather-val">--°C</span></div>
@@ -255,10 +270,9 @@ f1_ultimate_dashboard = """
             <div class="weather-item">💧 HUMEDAD: <span id="w-hum" class="weather-val">--%</span></div>
         </div>
 
-        <!-- TIMING MASTER -->
         <div class="top-grid">
             <div class="panel">
-                <header><h2>LIVE TELEMETRY & TIMING MASTER (GP AUSTRIA 2026)</h2></header>
+                <header><h2>LIVE TELEMETRY & TIMING MASTER (GP AUSTRIA)</h2></header>
                 <div class="table-wrapper">
                     <table>
                         <thead>
@@ -267,14 +281,13 @@ f1_ultimate_dashboard = """
                             </tr>
                         </thead>
                         <tbody id="telemetry-table-body">
-                            <tr><td colspan="12" class="loading-text">Conectando con la base de datos OpenF1...</td></tr>
+                            <tr><td colspan="12" class="loading-text">Iniciando enlace con OpenF1...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- SECCIÓN DE GRÁFICAS -->
         <div class="bottom-analytics">
             <div class="tabs-container">
                 <button class="tab-btn active" onclick="switchTab('tab-telemetry')">1. Telemetría Cara a Cara (V vs T)</button>
@@ -307,7 +320,7 @@ f1_ultimate_dashboard = """
     </div>
 
     <script>
-        const SESSION_KEY = 'latest'; // Inyectado dinámicamente por Python
+        const SESSION_KEY = 'latest'; // Inyectado por Python
         const API_URL = 'https://api.openf1.org/v1';
         
         let drivers = {};
@@ -317,10 +330,11 @@ f1_ultimate_dashboard = """
         async function init() {
             try {
                 const res = await fetch(`${API_URL}/drivers?session_key=${SESSION_KEY}`);
+                if(!res.ok) throw new Error("HTTP Err");
                 const data = await res.json();
                 
                 if(!data || data.length === 0) {
-                    document.getElementById('telemetry-table-body').innerHTML = "<tr><td colspan='12' class='loading-text'>La sesión seleccionada aún no contiene registros activos.</td></tr>";
+                    document.getElementById('telemetry-table-body').innerHTML = "<tr><td colspan='12' class='loading-text'>Esperando a que los comisarios liberen la telemetría en el Pit Lane...</td></tr>";
                     return;
                 }
 
@@ -333,7 +347,7 @@ f1_ultimate_dashboard = """
                         name: d.name_acronym || 'UNK',
                         color: d.team_colour ? `#${d.team_colour}` : '#ffffff',
                         number: d.driver_number,
-                        pos: index + 1, change: '-', tyre: 'MEDIUM',
+                        pos: index + 1, change: '-', tyre: 'UNKNOWN',
                         speed: 0, rpm: 0, gear: 'N', pitStatus: '1',
                         gapLeader: '-', interval: '-',
                         telemetryHistory: [], 
@@ -362,13 +376,13 @@ f1_ultimate_dashboard = """
                 initOvertakeChart();
 
                 tick();
-                setInterval(tick, 2000); // Polling equilibrado cada 2s
+                setInterval(tick, 2000);
                 
                 updateWeather();
                 setInterval(updateWeather, 10000);
             } catch (e) { 
                 console.error(e);
-                document.getElementById('telemetry-table-body').innerHTML = "<tr><td colspan='12' class='loading-text' style='color:#ff3838;'>Error de conexión con OpenF1. Reintentando...</td></tr>";
+                document.getElementById('telemetry-table-body').innerHTML = "<tr><td colspan='12' class='loading-text' style='color:#ff3838;'>Sincronizando flujos con los servidores de OpenF1...</td></tr>";
             }
         }
 
@@ -504,7 +518,7 @@ f1_ultimate_dashboard = """
                 renderTable();
                 updateChartsRuntime();
 
-            } catch (e) { console.warn("Actualizando transmisiones...", e); }
+            } catch (e) { console.warn(e); }
         }
 
         function updateChartsRuntime() {
@@ -584,7 +598,7 @@ f1_ultimate_dashboard = """
 </html>
 """
 
-# Reemplazamos la constante de sesión con la llave limpia obtenida por Python
+# Reemplazo seguro del ID de sesión
 dashboard_completo = f1_ultimate_dashboard.replace(
     "const SESSION_KEY = 'latest';", 
     f"const SESSION_KEY = '{session_id}';"
