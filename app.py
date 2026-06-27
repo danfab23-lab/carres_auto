@@ -13,6 +13,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Layout limpio enfocado al 100% en Tiempos y Gráficas Avanzadas
 f1_ultimate_dashboard = """
 <!DOCTYPE html>
 <html lang="es">
@@ -54,11 +55,10 @@ f1_ultimate_dashboard = """
         .weather-item { display: flex; align-items: center; gap: 8px; }
         .weather-val { color: #45f3ff; }
 
+        /* Contenedor Superior Ocupa el 100% del ancho sin el mapa */
         .top-grid {
-            display: grid;
-            grid-template-columns: 1.2fr 0.8fr;
-            gap: 15px;
-            height: 45vh;
+            width: 100%;
+            height: 48vh;
         }
         
         .bottom-analytics {
@@ -66,7 +66,7 @@ f1_ultimate_dashboard = """
             border: 1px solid #45f3ff33;
             border-radius: 10px;
             padding: 15px;
-            height: 42vh;
+            height: 39vh;
             display: flex;
             flex-direction: column;
         }
@@ -79,6 +79,7 @@ f1_ultimate_dashboard = """
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            height: 100%;
         }
         
         header {
@@ -97,9 +98,8 @@ f1_ultimate_dashboard = """
         tr:hover { background-color: #2b3a4a; }
         td { padding: 4px 6px; }
 
-        /* NUEVOS ESTILOS PARA FILAS EN PITS */
-        tr.status-pit-lane { background-color: rgba(255, 159, 67, 0.2); } /* Naranja suave: entrando/saliendo */
-        tr.status-pit-box { background-color: rgba(255, 56, 56, 0.25); }  /* Rojo suave: detenido en garage */
+        tr.status-pit-lane { background-color: rgba(255, 159, 67, 0.2); }
+        tr.status-pit-box { background-color: rgba(255, 56, 56, 0.25); }
         
         .pit-badge {
             padding: 2px 5px;
@@ -130,17 +130,6 @@ f1_ultimate_dashboard = """
         
         .telemetry-txt { color: #00ffcc; font-family: monospace; }
         .gap-txt { color: #ff9f43; font-family: monospace; }
-
-        .map-wrapper {
-            flex-grow: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #0b0c10;
-            border-radius: 6px;
-            height: 100%;
-        }
-        canvas { max-width: 100%; max-height: 100%; }
 
         .tabs-container {
             display: flex;
@@ -193,7 +182,7 @@ f1_ultimate_dashboard = """
             grid-template-columns: repeat(2, 1fr);
             gap: 4px;
             overflow-y: auto;
-            max-height: 220px;
+            max-height: 200px;
             border: 1px solid #334455;
             padding: 6px;
             background-color: #0b0c10;
@@ -220,10 +209,10 @@ f1_ultimate_dashboard = """
             <div class="weather-item">💧 HUMEDAD: <span id="w-hum" class="weather-val">--%</span></div>
         </div>
 
-        <!-- TIMING MASTER Y GPS MAP -->
+        <!-- TIMING MASTER AL 100% DE ANCHO -->
         <div class="top-grid">
             <div class="panel">
-                <header><h2>LIVE TELEMETRY & TIMING MASTER</h2></header>
+                <header><h2>LIVE TELEMETRY & TIMING MASTER (GP AUSTRIA 2026)</h2></header>
                 <div class="table-wrapper">
                     <table>
                         <thead>
@@ -234,11 +223,6 @@ f1_ultimate_dashboard = """
                         <tbody id="telemetry-table-body"></tbody>
                     </table>
                 </div>
-            </div>
-
-            <div class="panel">
-                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">DIBUJANDO TRAZADO...</div></header>
-                <div class="map-wrapper"><canvas id="trackMap" width="500" height="350"></canvas></div>
             </div>
         </div>
 
@@ -275,14 +259,11 @@ f1_ultimate_dashboard = """
     </div>
 
     <script>
-        const SESSION_KEY = 'latest'; 
+        const SESSION_KEY = 'latest'; // Se inyecta dinámicamente vía Python
         const API_URL = 'https://api.openf1.org/v1';
         
         let drivers = {};
         let positionHistory = {}; 
-        let circuitLoaded = false;
-        let trackPoints = []; 
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
         let chart1, chart2, chart3;
         let timeLabelCounter = 0;
@@ -301,24 +282,19 @@ f1_ultimate_dashboard = """
                         name: d.name_acronym,
                         color: d.team_colour ? `#${d.team_colour}` : '#ffffff',
                         number: d.driver_number,
-                        pos: 0, change: '-', tyre: 'UNKNOWN',
-                        speed: 0, rpm: 0, gear: 'N', pitStatus: '1', // NUEVO: Estado de pits inicial por defecto (1 = pista)
+                        pos: index + 1, change: '-', tyre: 'MEDIUM',
+                        speed: 0, rpm: 0, gear: 'N', pitStatus: '1',
                         gapLeader: 'INTERVAL', interval: '-',
-                        x: 0, y: 0,
                         telemetryHistory: [], 
-                        paceHistory: Array.from({length: 10}, () => 80 + Math.random()*4), 
-                        overtakePercentage: 15 + Math.random()*40
+                        paceHistory: Array.from({length: 10}, () => 64 + Math.random()*4), 
+                        overtakePercentage: 50 + Math.random()*40
                     };
 
-                    let optA = document.createElement('option');
-                    optA.value = d.driver_number; optA.innerText = d.name_acronym;
-                    if(index === 0) optA.selected = true;
-                    selectA.appendChild(optA);
+                    let optA = document.createElement('option'); optA.value = d.driver_number; optA.innerText = d.name_acronym;
+                    if(index === 0) optA.selected = true; selectA.appendChild(optA);
 
-                    let optB = document.createElement('option');
-                    optB.value = d.driver_number; optB.innerText = d.name_acronym;
-                    if(index === 1) optB.selected = true;
-                    selectB.appendChild(optB);
+                    let optB = document.createElement('option'); optB.value = d.driver_number; optB.innerText = d.name_acronym;
+                    if(index === 1) optB.selected = true; selectB.appendChild(optB);
 
                     let label = document.createElement('label');
                     label.className = 'checkbox-item';
@@ -379,10 +355,10 @@ f1_ultimate_dashboard = """
 
             chart2.data.datasets = selectedDriverNumbers.map(num => {
                 let d = drivers[num];
-                return {
+                return d ? {
                     label: d.name, data: d.paceHistory, borderColor: d.color, borderWidth: 2, fill: false, tension: 0.1
-                };
-            });
+                } : null;
+            }).filter(dataset => dataset !== null);
             chart2.update('none');
         }
 
@@ -412,35 +388,36 @@ f1_ultimate_dashboard = """
 
         async function tick() {
             try {
-                const [posRes, stintRes, carRes, locRes, intRes] = await Promise.all([
+                const [posRes, stintRes, carRes, intRes] = await Promise.all([
                     fetch(`${API_URL}/position?session_key=${SESSION_KEY}`),
                     fetch(`${API_URL}/stints?session_key=${SESSION_KEY}`),
                     fetch(`${API_URL}/car_data?session_key=${SESSION_KEY}`),
-                    fetch(`${API_URL}/location?session_key=${SESSION_KEY}`),
                     fetch(`${API_URL}/intervals?session_key=${SESSION_KEY}`)
                 ]);
 
                 const positions = await posRes.json();
                 const stints = await stintRes.json();
                 const cars = await carRes.json();
-                const locations = await locRes.json();
                 const intervals = await intRes.json();
 
-                positions.forEach(p => {
-                    let d = drivers[p.driver_number];
-                    if (d) {
-                        if (positionHistory[p.driver_number] !== undefined && positionHistory[p.driver_number] !== p.position) {
-                            let diff = positionHistory[p.driver_number] - p.position;
-                            d.change = diff > 0 ? `+${diff}` : `${diff}`;
+                if (positions && positions.length > 0) {
+                    positions.forEach(p => {
+                        let d = drivers[p.driver_number];
+                        if (d) {
+                            if (positionHistory[p.driver_number] !== undefined && positionHistory[p.driver_number] !== p.position) {
+                                let diff = positionHistory[p.driver_number] - p.position;
+                                d.change = diff > 0 ? `+${diff}` : `${diff}`;
+                            }
+                            d.pos = p.position;
+                            positionHistory[p.driver_number] = p.position;
                         }
-                        d.pos = p.position;
-                        positionHistory[p.driver_number] = p.position;
-                    }
-                });
+                    });
+                }
 
-                stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
+                if (stints && stints.length > 0) {
+                    stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
+                }
 
-                // 3. Telemetría y NUEVO: Extracción de pit_status
                 if(cars && cars.length > 0) {
                     let cache = {};
                     for(let i = cars.length - 1; i >= 0; i--) {
@@ -451,8 +428,7 @@ f1_ultimate_dashboard = """
                                 d.speed = c.speed ?? 0;
                                 d.rpm = c.rpm ?? 0;
                                 d.gear = c.gear ?? 'N';
-                                d.pitStatus = String(c.pit_status ?? '1'); // Guarda '1', '2' o '3'
-                                
+                                d.pitStatus = String(c.pit_status ?? '1');
                                 d.telemetryHistory.push(c.speed ?? 0);
                                 if(d.telemetryHistory.length > 25) d.telemetryHistory.shift();
                                 cache[c.driver_number] = true;
@@ -471,26 +447,7 @@ f1_ultimate_dashboard = """
                     });
                 }
 
-                locations.forEach(l => {
-                    let d = drivers[l.driver_number];
-                    if(d) {
-                        d.x = l.x + (Math.random() * 4 - 2); 
-                        d.y = l.y + (Math.random() * 4 - 2);
-                        if (!circuitLoaded && l.x && l.y) {
-                            trackPoints.push({x: l.x, y: l.y});
-                            if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x;
-                            if (l.y < minY) minY = l.y; if (l.y > maxY) maxY = l.y;
-                        }
-                    }
-                });
-
-                if (trackPoints.length > 300) { 
-                    circuitLoaded = true; 
-                    document.getElementById('circuit-status').innerText = "CIRCUITO OK"; 
-                }
-
                 renderTable();
-                drawMap();
                 updateChartsRuntime();
 
             } catch (e) { console.warn(e); }
@@ -516,20 +473,16 @@ f1_ultimate_dashboard = """
             if(chart2) { updatePaceChartDatasets(); }
 
             if(chart3) {
-                const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
+                const list = Object.values(drivers).sort((a,b) => a.pos - b.pos);
                 chart3.data.labels = list.map(d => d.name);
-                chart3.data.datasets[0].data = list.map(d => {
-                    if(d.speed > 290) d.overtakePercentage = Math.max(0, d.overtakePercentage - 0.4);
-                    else d.overtakePercentage = Math.min(100, d.overtakePercentage + 0.1);
-                    return d.overtakePercentage.toFixed(1);
-                });
+                chart3.data.datasets[0].data = list.map(d => d.overtakePercentage.toFixed(1));
                 chart3.update('none');
             }
         }
 
         function renderTable() {
             const tbody = document.getElementById('telemetry-table-body');
-            const list = Object.values(drivers).filter(d => d.pos > 0).sort((a,b) => a.pos - b.pos);
+            const list = Object.values(drivers).sort((a,b) => a.pos - b.pos);
             
             let html = '';
             list.forEach((d, idx) => {
@@ -541,16 +494,15 @@ f1_ultimate_dashboard = """
                 let displayGap = idx === 0 ? "LEADER" : d.gapLeader;
                 let displayInt = idx === 0 ? "LAP 1" : d.interval;
 
-                // NUEVO: Evaluación de Clases CSS y Etiquetas de Pits
                 let rowStyleClass = '';
-                let statusBadgeHtml = '<span style="color:#66bb6a;">TRACK</span>'; // Estado por defecto en pista
+                let statusBadgeHtml = '<span style="color:#66bb6a;">TRACK</span>';
 
                 if (d.pitStatus === '2') {
                     rowStyleClass = 'status-pit-lane';
-                    statusBadgeHtml = '<span class="pit-badge badge-lane">PIT LANE</span>'; // Entrando o saliendo
+                    statusBadgeHtml = '<span class="pit-badge badge-lane">PIT LANE</span>';
                 } else if (d.pitStatus === '3') {
                     rowStyleClass = 'status-pit-box';
-                    statusBadgeHtml = '<span class="pit-badge badge-box">IN PIT BOX</span>';  // Detenido con mecánicos
+                    statusBadgeHtml = '<span class="pit-badge badge-box">IN PIT BOX</span>';
                 }
 
                 html += `<tr class="${rowStyleClass}">
@@ -559,7 +511,7 @@ f1_ultimate_dashboard = """
                     <td class="change ${changeClass}">${d.change}</td>
                     <td>${d.name}</td>
                     <td style="color:#aaa;">#${d.number}</td>
-                    <td>${statusBadgeHtml}</td> <!-- NUEVA COLUMNA INYECTADA -->
+                    <td>${statusBadgeHtml}</td>
                     <td class="gap-txt">${displayGap}</td>
                     <td class="gap-txt" style="color:#aaa;">${displayInt}</td>
                     <td><span class="tyre tyre-${d.tyre}">${tLetter}</span></td>
@@ -571,76 +523,30 @@ f1_ultimate_dashboard = """
             tbody.innerHTML = html;
         }
 
-        function drawMap() {
-            const canvas = document.getElementById('trackMap');
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (trackPoints.length === 0) return;
-
-            const canvasPadding = 60; 
-            const scaleX = (canvas.width - canvasPadding * 2) / (maxX - minX || 1);
-            const scaleY = (canvas.height - canvasPadding * 2) / (maxY - minY || 1);
-            const scale = Math.min(scaleX, scaleY);
-
-            const trackWidthInCanvas = (maxX - minX) * scale;
-            const trackHeightInCanvas = (maxY - minY) * scale;
-
-            const offsetX = (canvas.width - trackWidthInCanvas) / 2;
-            const offsetY = (canvas.height - trackHeightInCanvas) / 2;
-
-            const toCanvasX = (x) => offsetX + (x - minX) * scale;
-            const toCanvasY = (y) => canvas.height - offsetY - (y - minY) * scale;
-
-            ctx.strokeStyle = '#2f3e46';
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            for(let i=0; i<trackPoints.length; i+=4) {
-                let pt = trackPoints[i];
-                if(i===0) ctx.moveTo(toCanvasX(pt.x), toCanvasY(pt.y));
-                else ctx.lineTo(toCanvasX(pt.x), toCanvasY(pt.y));
-            }
-            ctx.closePath();
-            ctx.stroke();
-
-            Object.values(drivers).forEach(d => {
-                if (d.x && d.y && d.pos > 0) {
-                    const cx = toCanvasX(d.x);
-                    const cy = toCanvasY(d.y);
-
-                    ctx.fillStyle = d.color;
-                    ctx.beginPath(); ctx.arc(cx, cy, 7, 0, 2 * Math.PI); ctx.fill();
-                    ctx.fillStyle = '#000000';
-                    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fill();
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = '9px sans-serif';
-                    ctx.fillText(d.name, cx + 9, cy + 3);
-                }
-            });
-        }
-
         window.onload = init;
     </script>
 </body>
 </html>
 """
 
-# INTERFAZ DE CONTROL LATERAL DE STREAMLIT (PYTHON)
-st.sidebar.title("🎛️ Transmisión Master Pro")
+# INTERFAZ DE CONTROL LATERAL DE STREAMLIT (Filtros reales Austria 2026)
+st.sidebar.title("🎛️ Centro de Transmisión")
+st.sidebar.subheader("GP de Austria 2026 🇦🇹")
+
 session_mode = st.sidebar.selectbox(
-    "Monitoreo de Sesión:",
-    ["Simulación (Datos Históricos)", "Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
+    "Selecciona la sesión actual:",
+    ["Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
 )
 
-if session_mode == "Simulación (Datos Históricos)":
-    session_id = "9535" 
-elif session_mode == "Práctica 3":
-    session_id = "latest"  
+# Mapeo de IDs de sesión reales de los servidores de OpenF1 para Austria 2026
+if session_mode == "Práctica 3":
+    session_id = "latest&location=Spielberg&session_name=Practice+3"
 elif session_mode == "Clasificación (Qualy)":
-    session_id = "latest"  
+    session_id = "latest&location=Spielberg&session_name=Qualifying"
 else:
-    session_id = "latest"  
+    session_id = "latest&location=Spielberg&session_name=Race"
 
+# Inyectar el filtro estricto al script de JS
 dashboard_completo = f1_ultimate_dashboard.replace(
     "const SESSION_KEY = 'latest';", 
     f"const SESSION_KEY = '{session_id}';"
