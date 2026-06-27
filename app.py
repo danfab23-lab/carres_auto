@@ -97,8 +97,9 @@ f1_ultimate_dashboard = """
         tr:hover { background-color: #2b3a4a; }
         td { padding: 4px 6px; }
 
-        tr.status-pit-lane { background-color: rgba(255, 159, 67, 0.2); }
-        tr.status-pit-box { background-color: rgba(255, 56, 56, 0.25); }
+        /* NUEVOS ESTILOS PARA FILAS EN PITS */
+        tr.status-pit-lane { background-color: rgba(255, 159, 67, 0.2); } /* Naranja suave: entrando/saliendo */
+        tr.status-pit-box { background-color: rgba(255, 56, 56, 0.25); }  /* Rojo suave: detenido en garage */
         
         .pit-badge {
             padding: 2px 5px;
@@ -236,7 +237,7 @@ f1_ultimate_dashboard = """
             </div>
 
             <div class="panel">
-                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">GENERANDO TRAZADO FINO...</div></header>
+                <header><h2>REAL-TIME GPS TRACK MAP</h2><div id="circuit-status" style="color: #45f3ff;">DIBUJANDO TRAZADO...</div></header>
                 <div class="map-wrapper"><canvas id="trackMap" width="500" height="350"></canvas></div>
             </div>
         </div>
@@ -301,7 +302,7 @@ f1_ultimate_dashboard = """
                         color: d.team_colour ? `#${d.team_colour}` : '#ffffff',
                         number: d.driver_number,
                         pos: 0, change: '-', tyre: 'UNKNOWN',
-                        speed: 0, rpm: 0, gear: 'N', pitStatus: '1',
+                        speed: 0, rpm: 0, gear: 'N', pitStatus: '1', // NUEVO: Estado de pits inicial por defecto (1 = pista)
                         gapLeader: 'INTERVAL', interval: '-',
                         x: 0, y: 0,
                         telemetryHistory: [], 
@@ -420,7 +421,7 @@ f1_ultimate_dashboard = """
                 ]);
 
                 const positions = await posRes.json();
-                const stints = await stintsRes.json();
+                const stints = await stintRes.json();
                 const cars = await carRes.json();
                 const locations = await locRes.json();
                 const intervals = await intRes.json();
@@ -439,6 +440,7 @@ f1_ultimate_dashboard = """
 
                 stints.forEach(s => { if(drivers[s.driver_number]) drivers[s.driver_number].tyre = s.compound; });
 
+                // 3. Telemetría y NUEVO: Extracción de pit_status
                 if(cars && cars.length > 0) {
                     let cache = {};
                     for(let i = cars.length - 1; i >= 0; i--) {
@@ -449,7 +451,7 @@ f1_ultimate_dashboard = """
                                 d.speed = c.speed ?? 0;
                                 d.rpm = c.rpm ?? 0;
                                 d.gear = c.gear ?? 'N';
-                                d.pitStatus = String(c.pit_status ?? '1');
+                                d.pitStatus = String(c.pit_status ?? '1'); // Guarda '1', '2' o '3'
                                 
                                 d.telemetryHistory.push(c.speed ?? 0);
                                 if(d.telemetryHistory.length > 25) d.telemetryHistory.shift();
@@ -469,15 +471,12 @@ f1_ultimate_dashboard = """
                     });
                 }
 
-                // NUEVO ALGORITMO: Capturar trazo fino basándonos preferentemente en un solo auto (Líder o coche regular)
                 locations.forEach(l => {
                     let d = drivers[l.driver_number];
                     if(d) {
-                        d.x = l.x; 
-                        d.y = l.y;
-                        
-                        // Limitamos la captura para armar el mapa usando datos limpios de un solo auto (evita el manchón masivo)
-                        if (!circuitLoaded && l.x && l.y && (l.driver_number == '1' || l.driver_number == '4' || trackPoints.length < 150)) {
+                        d.x = l.x + (Math.random() * 4 - 2); 
+                        d.y = l.y + (Math.random() * 4 - 2);
+                        if (!circuitLoaded && l.x && l.y) {
                             trackPoints.push({x: l.x, y: l.y});
                             if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x;
                             if (l.y < minY) minY = l.y; if (l.y > maxY) maxY = l.y;
@@ -485,10 +484,9 @@ f1_ultimate_dashboard = """
                     }
                 });
 
-                // Detener la acumulación cuando el mapa sea estable para congelar el trazado lineal elegante
-                if (trackPoints.length > 180) { 
+                if (trackPoints.length > 300) { 
                     circuitLoaded = true; 
-                    document.getElementById('circuit-status').innerText = "TRAZADO FIJO OK"; 
+                    document.getElementById('circuit-status').innerText = "CIRCUITO OK"; 
                 }
 
                 renderTable();
@@ -543,15 +541,16 @@ f1_ultimate_dashboard = """
                 let displayGap = idx === 0 ? "LEADER" : d.gapLeader;
                 let displayInt = idx === 0 ? "LAP 1" : d.interval;
 
+                // NUEVO: Evaluación de Clases CSS y Etiquetas de Pits
                 let rowStyleClass = '';
-                let statusBadgeHtml = '<span style="color:#66bb6a;">TRACK</span>';
+                let statusBadgeHtml = '<span style="color:#66bb6a;">TRACK</span>'; // Estado por defecto en pista
 
                 if (d.pitStatus === '2') {
                     rowStyleClass = 'status-pit-lane';
-                    statusBadgeHtml = '<span class="pit-badge badge-lane">PIT LANE</span>';
+                    statusBadgeHtml = '<span class="pit-badge badge-lane">PIT LANE</span>'; // Entrando o saliendo
                 } else if (d.pitStatus === '3') {
                     rowStyleClass = 'status-pit-box';
-                    statusBadgeHtml = '<span class="pit-badge badge-box">IN PIT BOX</span>';
+                    statusBadgeHtml = '<span class="pit-badge badge-box">IN PIT BOX</span>';  // Detenido con mecánicos
                 }
 
                 html += `<tr class="${rowStyleClass}">
@@ -560,7 +559,7 @@ f1_ultimate_dashboard = """
                     <td class="change ${changeClass}">${d.change}</td>
                     <td>${d.name}</td>
                     <td style="color:#aaa;">#${d.number}</td>
-                    <td>${statusBadgeHtml}</td>
+                    <td>${statusBadgeHtml}</td> <!-- NUEVA COLUMNA INYECTADA -->
                     <td class="gap-txt">${displayGap}</td>
                     <td class="gap-txt" style="color:#aaa;">${displayInt}</td>
                     <td><span class="tyre tyre-${d.tyre}">${tLetter}</span></td>
@@ -593,11 +592,10 @@ f1_ultimate_dashboard = """
             const toCanvasX = (x) => offsetX + (x - minX) * scale;
             const toCanvasY = (y) => canvas.height - offsetY - (y - minY) * scale;
 
-            // REDISEÑO: Dibujar el trazado fino fijos estilo línea de circuito oficial
-            ctx.strokeStyle = '#3a4f5c';
-            ctx.lineWidth = 3;  // Reducido de 5 a 3 para máxima elegancia
+            ctx.strokeStyle = '#2f3e46';
+            ctx.lineWidth = 5;
             ctx.beginPath();
-            for(let i=0; i<trackPoints.length; i++) {
+            for(let i=0; i<trackPoints.length; i+=4) {
                 let pt = trackPoints[i];
                 if(i===0) ctx.moveTo(toCanvasX(pt.x), toCanvasY(pt.y));
                 else ctx.lineTo(toCanvasX(pt.x), toCanvasY(pt.y));
@@ -605,7 +603,6 @@ f1_ultimate_dashboard = """
             ctx.closePath();
             ctx.stroke();
 
-            // Ubicaciones de los monoplazas deslizándose exactamente encima de la línea fija
             Object.values(drivers).forEach(d => {
                 if (d.x && d.y && d.pos > 0) {
                     const cx = toCanvasX(d.x);
