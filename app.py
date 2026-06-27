@@ -1,4 +1,5 @@
 import streamlit as st
+import requests
 
 # Configuración de pantalla completa en Escritorio
 st.set_page_config(page_title="F1 Advanced Command Center & Analytics", layout="wide")
@@ -13,7 +14,45 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Layout limpio enfocado al 100% en Tiempos y Gráficas Avanzadas
+# --- MOTOR AUTOMÁTICO EN PYTHON PARA IDENTIFICAR LOS IDS DE AUSTRIA 2026 ---
+@st.cache_data(ttl=300)  # Guarda en cache por 5 minutos para no saturar
+def obtener_session_id_real(tipo_sesion):
+    try:
+        # Consultamos las sesiones oficiales del año actual para Austria
+        url = "https://api.openf1.org/v1/sessions?year=2026&country_name=Austria"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            # Mapeo por el nombre oficial que asigna la FIA en el backend
+            name_map = {
+                "Práctica 3": "Practice 3",
+                "Clasificación (Qualy)": "Qualifying",
+                "Carrera (Grand Prix)": "Race"
+            }
+            target_name = name_map.get(tipo_sesion, "Practice 3")
+            
+            # Buscamos de la más nueva a la más vieja
+            for session in reversed(data):
+                if target_name in session.get('session_name', ''):
+                    return str(session.get('session_key'))
+        return "latest"  # Fallback seguro por si los servidores fallan
+    except Exception:
+        return "latest"
+
+# Barra lateral de control
+st.sidebar.title("🎛️ Centro de Transmisión")
+st.sidebar.subheader("GP de Austria 2026 🇦🇹")
+
+session_mode = st.sidebar.selectbox(
+    "Selecciona la sesión actual:",
+    ["Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
+)
+
+# Descubrimiento automático del ID numérico exacto en los servidores de OpenF1
+session_id = obtener_session_id_real(session_mode)
+st.sidebar.info(f"ID del Servidor Conectado: {session_id}")
+
+# Contenedor HTML Maestro sin Trackmap
 f1_ultimate_dashboard = """
 <!DOCTYPE html>
 <html lang="es">
@@ -194,21 +233,25 @@ f1_ultimate_dashboard = """
             font-size: 11px;
             cursor: pointer;
         }
+        .loading-msg {
+            color: white;
+            text-align: center;
+            padding: 40px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
 
     <div class="main-layout">
-        <!-- CLIMA -->
         <div class="weather-bar">
-            <div class="weather-item">🌧️ LLUVIA: <span id="w-rain" class="weather-val">0%</span></div>
+            <div class="weather-item">🌧️ LLUVIA: <span id="w-rain" class="weather-val">--</span></div>
             <div class="weather-item">🌡️ AIRE: <span id="w-air" class="weather-val">--°C</span></div>
             <div class="weather-item">🛣️ PISTA: <span id="w-track" class="weather-val">--°C</span></div>
             <div class="weather-item">💨 VIENTO: <span id="w-wind" class="weather-val">-- m/s</span></div>
             <div class="weather-item">💧 HUMEDAD: <span id="w-hum" class="weather-val">--%</span></div>
         </div>
 
-        <!-- TIMING MASTER -->
         <div class="top-grid">
             <div class="panel">
                 <header><h2>LIVE TELEMETRY & TIMING MASTER (GP AUSTRIA 2026)</h2></header>
@@ -219,13 +262,14 @@ f1_ultimate_dashboard = """
                                 <th></th><th>POS</th><th>+/-</th><th>PILOTO</th><th>Nº</th><th>ESTADO</th><th>GAP LEADER</th><th>INTERVAL</th><th>LLANTA</th><th>VELOCIDAD</th><th>RPM</th><th>M.</th>
                             </tr>
                         </thead>
-                        <tbody id="telemetry-table-body"></tbody>
+                        <tbody id="telemetry-table-body">
+                            <tr><td colspan="12" class="loading-msg">Sincronizando con los servidores de OpenF1...</td></tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- SECCIÓN DE GRÁFICAS -->
         <div class="bottom-analytics">
             <div class="tabs-container">
                 <button class="tab-btn active" onclick="switchTab('tab-telemetry')">1. Telemetría Cara a Cara (V vs T)</button>
@@ -258,42 +302,46 @@ f1_ultimate_dashboard = """
     </div>
 
     <script>
-        const SESSION_KEY = 'latest'; // Reemplazado por Python
+        const SESSION_KEY = 'latest'; // Reemplazado por Python dinámicamente
         const API_URL = 'https://api.openf1.org/v1';
         
         let drivers = {};
         let positionHistory = {}; 
-
         let chart1, chart2, chart3;
-        let timeLabelCounter = 0;
 
         async function init() {
             try {
                 const res = await fetch(`${API_URL}/drivers?session_key=${SESSION_KEY}`);
+                if (!res.ok) throw new Error("Error obteniendo pilotos");
                 const data = await res.json();
                 
+                if(!data || data.length === 0) {
+                    document.getElementById('telemetry-table-body').innerHTML = `<tr><td colspan='12' class='loading-msg'>La sesión aún no tiene pilotos registrados en pista.</td></tr>`;
+                    return;
+                }
+
                 const selectA = document.getElementById('pA-select');
                 const selectB = document.getElementById('pB-select');
                 const paceCheckboxesContainer = document.getElementById('pace-checkboxes');
 
                 data.forEach((d, index) => {
                     drivers[d.driver_number] = {
-                        name: d.name_acronym,
+                        name: d.name_acronym || 'UNK',
                         color: d.team_colour ? `#${d.team_colour}` : '#ffffff',
                         number: d.driver_number,
-                        pos: index + 1, change: '-', tyre: 'MEDIUM',
+                        pos: index + 1, change: '-', tyre: 'UNKNOWN',
                         speed: 0, rpm: 0, gear: 'N', pitStatus: '1',
-                        gapLeader: 'INTERVAL', interval: '-',
+                        gapLeader: '-', interval: '-',
                         telemetryHistory: [], 
                         paceHistory: Array.from({length: 10}, () => 64 + Math.random()*4), 
-                        overtakePercentage: 50 + Math.random()*40
+                        overtakePercentage: 100
                     };
 
                     let optA = document.createElement('option'); optA.value = d.driver_number; optA.innerText = d.name_acronym;
                     if(index === 0) optA.selected = true; selectA.appendChild(optA);
 
                     let optB = document.createElement('option'); optB.value = d.driver_number; optB.innerText = d.name_acronym;
-                    if(index === 1) optB.selected = true; selectB.appendChild(optB);
+                    if(index === 1 || index === data.length - 1) optB.selected = true; selectB.appendChild(optB);
 
                     let label = document.createElement('label');
                     label.className = 'checkbox-item';
@@ -310,11 +358,14 @@ f1_ultimate_dashboard = """
                 initOvertakeChart();
 
                 tick();
-                setInterval(tick, 1500);
+                setInterval(tick, 2000); // Polling seguro cada 2 segundos
                 
                 updateWeather();
-                setInterval(updateWeather, 10000);
-            } catch (e) { console.error(e); }
+                setInterval(updateWeather, 12000);
+            } catch (e) { 
+                console.error(e); 
+                document.getElementById('telemetry-table-body').innerHTML = `<tr><td colspan='12' class='loading-msg' style='color:#ff3838;'>Esperando apertura de compuertas OpenF1...</td></tr>`;
+            }
         }
 
         function switchTab(tabId) {
@@ -329,11 +380,11 @@ f1_ultimate_dashboard = """
             const ctx = document.getElementById('chartTelemetry').getContext('2d');
             chart1 = new Chart(ctx, {
                 type: 'line',
-                data: { labels: [], datasets: [
+                data: { labels: Array.from({length: 25}, () => ''), datasets: [
                     { label: 'Piloto A', data: [], borderColor: '#45f3ff', borderWidth: 2, tension: 0.3, pointRadius: 0 },
                     { label: 'Piloto B', data: [], borderColor: '#ff1801', borderWidth: 2, tension: 0.3, pointRadius: 0 }
                 ]},
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 350, grid: { color: '#334455' } }, x: { grid: { display: false } } } }
+                options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min: 0, max: 350, grid: { color: '#334455' } }, x: { grid: { display: false } } } }
             });
         }
 
@@ -342,7 +393,7 @@ f1_ultimate_dashboard = """
             chart2 = new Chart(ctx, {
                 type: 'line',
                 data: { labels: ['V1','V2','V3','V4','V5','V6','V7','V8','V9','V10'], datasets: [] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#334455' } } } }
+                options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { grid: { color: '#334455' } } } }
             });
             updatePaceChartDatasets();
         }
@@ -358,15 +409,15 @@ f1_ultimate_dashboard = """
                     label: d.name, data: d.paceHistory, borderColor: d.color, borderWidth: 2, fill: false, tension: 0.1
                 } : null;
             }).filter(dataset => dataset !== null);
-            chart2.update('none');
+            chart2.update();
         }
 
         function initOvertakeChart() {
             const ctx = document.getElementById('chartOvertake').getContext('2d');
             chart3 = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: [], datasets: [{ label: 'Despliegue Overtake Mode / Manual Override %', data: [], backgroundColor: '#00ffcc' }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min:0, max:100, grid: { color: '#334455' } } } }
+                data: { labels: [], datasets: [{ label: 'Nivel Manual Override %', data: [], backgroundColor: '#00ffcc' }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { min:0, max:100, grid: { color: '#334455' } } } }
             });
         }
 
@@ -449,7 +500,7 @@ f1_ultimate_dashboard = """
                 renderTable();
                 updateChartsRuntime();
 
-            } catch (e) { console.warn(e); }
+            } catch (e) { console.warn("Sincronizando flujos...", e); }
         }
 
         function updateChartsRuntime() {
@@ -458,14 +509,9 @@ f1_ultimate_dashboard = """
             
             if(drivers[pANum] && drivers[pBNum] && chart1) {
                 chart1.data.datasets[0].label = drivers[pANum].name;
-                chart1.data.datasets[0].borderColor = drivers[pANum].color;
                 chart1.data.datasets[0].data = drivers[pANum].telemetryHistory;
                 chart1.data.datasets[1].label = drivers[pBNum].name;
-                chart1.data.datasets[1].borderColor = drivers[pBNum].color;
                 chart1.data.datasets[1].data = drivers[pBNum].telemetryHistory;
-                timeLabelCounter++;
-                chart1.data.labels.push('');
-                if(chart1.data.labels.length > 25) chart1.data.labels.shift();
                 chart1.update('none');
             }
 
@@ -474,7 +520,11 @@ f1_ultimate_dashboard = """
             if(chart3) {
                 const list = Object.values(drivers).sort((a,b) => a.pos - b.pos);
                 chart3.data.labels = list.map(d => d.name);
-                chart3.data.datasets[0].data = list.map(d => d.overtakePercentage.toFixed(1));
+                chart3.data.datasets[0].data = list.map(d => {
+                    if(d.speed > 290) d.overtakePercentage = Math.max(0, d.overtakePercentage - 1.5);
+                    else d.overtakePercentage = Math.min(100, d.overtakePercentage + 0.4);
+                    return d.overtakePercentage.toFixed(1);
+                });
                 chart3.update('none');
             }
         }
@@ -482,6 +532,8 @@ f1_ultimate_dashboard = """
         function renderTable() {
             const tbody = document.getElementById('telemetry-table-body');
             const list = Object.values(drivers).sort((a,b) => a.pos - b.pos);
+            
+            if(list.length === 0) return;
             
             let html = '';
             list.forEach((d, idx) => {
@@ -528,24 +580,7 @@ f1_ultimate_dashboard = """
 </html>
 """
 
-# INTERFAZ DE CONTROL LATERAL DE STREAMLIT (Filtros estrictos de IDs de Austria 2026)
-st.sidebar.title("🎛️ Centro de Transmisión")
-st.sidebar.subheader("GP de Austria 2026 🇦🇹")
-
-session_mode = st.sidebar.selectbox(
-    "Selecciona la sesión actual:",
-    ["Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
-)
-
-# Mapeo por ID numérico indexado directo de los servidores de OpenF1 para Austria 2026
-if session_mode == "Práctica 3":
-    session_id = "9549"
-elif session_mode == "Clasificación (Qualy)":
-    session_id = "9550"
-else:
-    session_id = "9553"
-
-# Inyectar el ID puro de sesión de forma segura al motor
+# Inyectar la variable de control al script de JS de forma limpia
 dashboard_completo = f1_ultimate_dashboard.replace(
     "const SESSION_KEY = 'latest';", 
     f"const SESSION_KEY = '{session_id}';"
