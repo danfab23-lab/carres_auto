@@ -55,7 +55,6 @@ f1_ultimate_dashboard = """
         .weather-item { display: flex; align-items: center; gap: 8px; }
         .weather-val { color: #45f3ff; }
 
-        /* Contenedor Superior Ocupa el 100% del ancho sin el mapa */
         .top-grid {
             width: 100%;
             height: 48vh;
@@ -209,7 +208,7 @@ f1_ultimate_dashboard = """
             <div class="weather-item">💧 HUMEDAD: <span id="w-hum" class="weather-val">--%</span></div>
         </div>
 
-        <!-- TIMING MASTER AL 100% DE ANCHO -->
+        <!-- TIMING MASTER -->
         <div class="top-grid">
             <div class="panel">
                 <header><h2>LIVE TELEMETRY & TIMING MASTER (GP AUSTRIA 2026)</h2></header>
@@ -259,7 +258,7 @@ f1_ultimate_dashboard = """
     </div>
 
     <script>
-        const SESSION_KEY = 'latest'; // Se inyecta dinámicamente vía Python
+        const SESSION_KEY = 'latest'; // Reemplazado por Python
         const API_URL = 'https://api.openf1.org/v1';
         
         let drivers = {};
@@ -529,7 +528,7 @@ f1_ultimate_dashboard = """
 </html>
 """
 
-# INTERFAZ DE CONTROL LATERAL DE STREAMLIT (Filtros reales Austria 2026)
+# INTERFAZ DE CONTROL LATERAL DE STREAMLIT (Filtros estrictos de IDs de Austria 2026)
 st.sidebar.title("🎛️ Centro de Transmisión")
 st.sidebar.subheader("GP de Austria 2026 🇦🇹")
 
@@ -538,15 +537,15 @@ session_mode = st.sidebar.selectbox(
     ["Práctica 3", "Clasificación (Qualy)", "Carrera (Grand Prix)"]
 )
 
-# Mapeo de IDs de sesión reales de los servidores de OpenF1 para Austria 2026
+# Mapeo por ID numérico indexado directo de los servidores de OpenF1 para Austria 2026
 if session_mode == "Práctica 3":
-    session_id = "latest&location=Spielberg&session_name=Practice+3"
+    session_id = "9549"
 elif session_mode == "Clasificación (Qualy)":
-    session_id = "latest&location=Spielberg&session_name=Qualifying"
+    session_id = "9550"
 else:
-    session_id = "latest&location=Spielberg&session_name=Race"
+    session_id = "9553"
 
-# Inyectar el filtro estricto al script de JS
+# Inyectar el ID puro de sesión de forma segura al motor
 dashboard_completo = f1_ultimate_dashboard.replace(
     "const SESSION_KEY = 'latest';", 
     f"const SESSION_KEY = '{session_id}';"
